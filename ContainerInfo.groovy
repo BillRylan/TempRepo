@@ -50,6 +50,53 @@ def unifyMemoryUnit(String memoryValue) {
     return memoryValue // 无法转换时保留原始值
 }
 
+def unifyCpuUnit(String cpuValue) {
+    if (cpuValue.endsWith('m')) {
+        // 已经是m单位，直接返回
+        return cpuValue
+    } else {
+        // 处理数值型（如0.5、1等），转换为毫核（1 = 1000m）
+        try {
+            def value = cpuValue.toDouble()
+            return "${(value * 1000).toInteger()}m"
+        } catch (Exception e) {
+            return cpuValue // 无法转换时保留原始值
+        }
+    }
+}
+
+// 统一内存单位为Mi的方法
+def unifyMemoryUnit(String memoryValue) {
+    if (memoryValue.endsWith('Mi')) {
+        // 已经是Mi单位，直接返回
+        return memoryValue
+    }
+    
+    // 定义单位转换关系（以Mi为基准）
+    def unitFactors = [
+        'M': 1,       // 1M ≈ 1Mi
+        'Gi': 1024,   // 1Gi = 1024Mi
+        'G': 1024,    // 1G ≈ 1024Mi
+        'Ki': 0.0009765625, // 1Ki = 1/1024 Mi
+        'K': 0.0009765625   // 1K ≈ 1/1024 Mi
+    ]
+    
+    // 提取数值和单位
+    def matcher = (memoryValue =~ /(\d+(\.\d+)?)(\D+)?/)
+    if (matcher.matches()) {
+        def value = matcher[0][1].toDouble()
+        def unit = matcher[0][3] ?: 'M' // 默认单位为M
+        
+        if (unitFactors.containsKey(unit)) {
+            def miValue = value * unitFactors[unit]
+            // 取整数（内存通常为整数Mi）
+            return "${miValue.toInteger()}Mi"
+        }
+    }
+    
+    return memoryValue // 无法转换时保留原始值
+}
+
 // 提取最外层的Name和Namespace信息
 def name = (doc =~ /Name:\s+(\S+)/)[0][1]
 def namespace = (doc =~ /Namespace:\s+(\S+)/)[0][1]
