@@ -1,61 +1,27 @@
-/* Jira Integration Styles */
-.jira-integration {
-    background-color: white;
-    border-radius: var(--border-radius);
-    padding: 25px;
-    box-shadow: var(--shadow);
-    grid-column: 1 / -1;
-    margin-bottom: 25px;
+/* 基础样式重置 */
+:root {
+    --primary: #2563eb;
+    --primary-light: #3b82f6;
+    --success: #10b981;
+    --info: #06b6d4;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --light: #f8fafc;
+    --dark: #1e293b;
+    --gray: #64748b;
+    --light-gray: #e2e8f0;
+    --border-radius: 12px;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --transition: all 0.3s ease;
 }
 
-.jira-integration h2 {
-    margin-bottom: 20px;
-    color: var(--primary);
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
-.card {
-    border: 1px solid #e2e8f0;
-    border-radius: var(--border-radius);
-    padding: 20px;
-    margin-bottom: 20px;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    font-weight: 600;
+body {
+    background-color: #f1f5f9;
     color: var(--dark);
-}
-
-.form-group input,
-.form-group textarea {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #cbd5e1;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-}
-
-.status-message {
-    margin-top: 10px;
-    padding: 10px;
-    border-radius: var(--border-radius);
-}
-
-.status-message.success {
-    background-color: rgba(16, 185, 129, 0.1);
-    color: #059669;
-}
-
-.status-message.error {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: #dc2626;
-}
-
-.hidden {
-    display: none;
-}
