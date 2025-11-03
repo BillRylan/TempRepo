@@ -1,289 +1,61 @@
-/* Base Styles */
-:root {
-    --primary: #2563eb;
-    --primary-light: #3b82f6;
-    --secondary: #64748b;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --light: #f8fafc;
-    --dark: #1e293b;
-    --border-radius: 8px;
-    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --transition: all 0.3s ease;
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-body {
-    background-color: #f1f5f9;
-    color: var(--dark);
-    line-height: 1.6;
-    padding: 20px;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-/* Header Styles */
-header {
-    text-align: center;
-    margin-bottom: 30px;
-    padding: 20px;
-    background-color: white;
-    border-radius: var(--border-radius);
-    box-shadow: var(--shadow);
-}
-
-header h1 {
-    color: var(--primary);
-    margin-bottom: 10px;
-    font-size: 2.2rem;
-}
-
-.subtitle {
-    color: var(--secondary);
-    font-size: 1.1rem;
-}
-
-/* Main Content Styles */
-main {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 25px;
-}
-
-@media (min-width: 768px) {
-    main {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-@media (min-width: 1024px) {
-    main {
-        grid-template-columns: 1fr 2fr;
-    }
-}
-
-/* State Card Styles */
-.state-card {
+/* Jira Integration Styles */
+.jira-integration {
     background-color: white;
     border-radius: var(--border-radius);
     padding: 25px;
     box-shadow: var(--shadow);
     grid-column: 1 / -1;
+    margin-bottom: 25px;
 }
 
-.state-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.jira-integration h2 {
+    margin-bottom: 20px;
+    color: var(--primary);
+}
+
+.card {
+    border: 1px solid #e2e8f0;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.form-group {
     margin-bottom: 15px;
 }
 
-.state-header h2 {
-    font-size: 1.5rem;
-    color: var(--dark);
-}
-
-.state-badge {
-    background-color: var(--primary);
-    color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
     font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.9rem;
-}
-
-.state-description {
-    background-color: #f8fafc;
-    padding: 15px;
-    border-radius: var(--border-radius);
-    border-left: 4px solid var(--primary);
-}
-
-/* Flow Diagram Styles */
-.flow-diagram {
-    background-color: white;
-    border-radius: var(--border-radius);
-    padding: 25px;
-    box-shadow: var(--shadow);
-    grid-column: 1 / -1;
-}
-
-.flow-diagram h3 {
-    margin-bottom: 20px;
     color: var(--dark);
 }
 
-.flow-nodes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 15px;
-    justify-content: center;
-    position: relative;
-    padding: 20px 0;
-}
-
-.flow-node {
-    background-color: #e2e8f0;
-    color: var(--secondary);
-    padding: 10px 18px;
-    border-radius: 20px;
-    font-weight: 600;
-    transition: var(--transition);
-    cursor: default;
-    position: relative;
-    min-width: 100px;
-    text-align: center;
-}
-
-.flow-node::after {
-    content: "→";
-    position: absolute;
-    right: -20px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--secondary);
-}
-
-.flow-node:last-child::after {
-    content: none;
-}
-
-.flow-node.active {
-    background-color: var(--primary);
-    color: white;
-    transform: scale(1.1);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
-}
-
-/* Action Buttons Styles */
-.actions {
-    background-color: white;
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
     border-radius: var(--border-radius);
-    padding: 25px;
-    box-shadow: var(--shadow);
+    font-size: 1rem;
 }
 
-.actions h3 {
-    margin-bottom: 20px;
-    color: var(--dark);
-}
-
-.button-group {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-}
-
-@media (min-width: 768px) {
-    .button-group {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-.transition-btn {
-    background-color: var(--primary);
-    color: white;
-    border: none;
-    padding: 12px 15px;
+.status-message {
+    margin-top: 10px;
+    padding: 10px;
     border-radius: var(--border-radius);
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
 }
 
-.transition-btn:hover {
-    background-color: var(--primary-light);
-    transform: translateY(-2px);
+.status-message.success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: #059669;
 }
 
-.transition-btn i {
-    font-size: 0.9rem;
+.status-message.error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
 }
 
-.loading {
-    color: var(--secondary);
-    text-align: center;
-    padding: 20px;
+.hidden {
+    display: none;
 }
-
-/* History Styles */
-.history {
-    background-color: white;
-    border-radius: var(--border-radius);
-    padding: 25px;
-    box-shadow: var(--shadow);
-}
-
-.history h3 {
-    margin-bottom: 20px;
-    color: var(--dark);
-}
-
-#history-list {
-    list-style: none;
-    max-height: 300px;
-    overflow-y: auto;
-    padding-right: 10px;
-}
-
-#history-list li {
-    padding: 10px 15px;
-    border-bottom: 1px solid #f1f5f9;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-#history-list li:last-child {
-    border-bottom: none;
-}
-
-#history-list li::before {
-    content: "•";
-    color: var(--primary);
-    font-weight: bold;
-}
-
-/* Footer Styles */
-footer {
-    text-align: center;
-    margin-top: 40px;
-    color: var(--secondary);
-    font-size: 0.9rem;
-}
-
-/* State Color Mapping */
-.state-badge.OPEN { background-color: var(--secondary); }
-.state-badge.POC { background-color: var(--warning); }
-.state-badge.SURGERY { background-color: #8b5cf6; }
-.state-badge.IN_DEV { background-color: #3b82f6; }
-.state-badge.TDA { background-color: #06b6d4; }
-.state-badge.TECH_FORUM { background-color: #0ea5e9; }
-.state-badge.UAT { background-color: #10b981; }
-.state-badge.PROD { background-color: #16a34a; }
-.state-badge.DONE { background-color: #65a30d; }
-
-.flow-node.OPEN.active { background-color: var(--secondary); }
-.flow-node.POC.active { background-color: var(--warning); }
-.flow-node.SURGERY.active { background-color: #8b5cf6; }
-.flow-node.IN_DEV.active { background-color: #3b82f6; }
-.flow-node.TDA.active { background-color: #06b6d4; }
-.flow-node.TECH_FORUM.active { background-color: #0ea5e9; }
-.flow-node.UAT.active { background-color: #10b981; }
-.flow-node.PROD.active { background-color: #16a34a; }
-.flow-node.DONE.active { background-color: #65a30d; }
