@@ -1,46 +1,138 @@
-<!-- Jira Integration Section -->
-<div class="jira-integration">
-    <h2>Jira Integration</h2>
-    
-    <!-- Login Form -->
-    <div class="jira-login-form card">
-        <h3>Jira Login</h3>
-        <div class="form-group">
-            <label for="jira-server">Jira Server URL</label>
-            <input type="url" id="jira-server" placeholder="https://your-domain.atlassian.net" required>
-        </div>
-        <div class="form-group">
-            <label for="jira-email">Email</label>
-            <input type="email" id="jira-email" placeholder="your-email@example.com" required>
-        </div>
-        <div class="form-group">
-            <label for="jira-api-token">API Token</label>
-            <input type="password" id="jira-api-token" placeholder="Your Jira API Token" required>
-        </div>
-        <button id="login-btn" class="transition-btn">
-            <i class="fa fa-sign-in"></i> Login to Jira
-        </button>
-        <div id="login-status" class="status-message"></div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira Workflow Manager</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航栏 -->
+        <nav class="navbar">
+            <div class="navbar-logo">
+                <i class="fa fa-tasks"></i>
+                <h1>Jira Workflow Manager</h1>
+            </div>
+            <div class="navbar-user" id="user-menu">
+                <button id="login-btn-nav" class="btn btn-primary">
+                    <i class="fa fa-sign-in"></i> Login to Jira
+                </button>
+                <div id="user-info" class="hidden">
+                    <span id="username-display"></span>
+                    <button id="logout-btn" class="btn btn-outline">
+                        <i class="fa fa-sign-out"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 登录表单（初始显示） -->
+            <section id="login-section" class="card">
+                <h2 class="section-title">Jira Authentication</h2>
+                <div class="form-group">
+                    <label for="jira-server">Jira Server URL</label>
+                    <input type="url" id="jira-server" placeholder="https://your-domain.atlassian.net" required>
+                </div>
+                <div class="form-group">
+                    <label for="jira-email">Email</label>
+                    <input type="email" id="jira-email" placeholder="your-email@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="jira-api-token">API Token</label>
+                    <input type="password" id="jira-api-token" placeholder="Your Jira API Token" required>
+                    <small class="form-hint">Get API token from <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">Atlassian Account</a></small>
+                </div>
+                <button id="login-btn" class="btn btn-primary btn-block">
+                    <i class="fa fa-sign-in"></i> Login
+                </button>
+                <div id="login-status" class="status-message"></div>
+            </section>
+
+            <!-- Issue操作区（登录后显示） -->
+            <section id="issue-operations" class="hidden">
+                <div class="card-grid">
+                    <!-- 创建Issue卡片 -->
+                    <div class="card">
+                        <h2 class="section-title">
+                            <i class="fa fa-plus-circle"></i> Create New Issue
+                        </h2>
+                        <div class="form-group">
+                            <label for="project-key">Project Key</label>
+                            <input type="text" id="project-key" placeholder="e.g., ARCH" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="issue-summary">Summary</label>
+                            <input type="text" id="issue-summary" placeholder="Issue title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="issue-description">Description</label>
+                            <textarea id="issue-description" rows="3" placeholder="Detailed description"></textarea>
+                        </div>
+                        <button id="create-issue-btn" class="btn btn-success btn-block">
+                            <i class="fa fa-plus"></i> Create Issue
+                        </button>
+                        <div id="create-issue-status" class="status-message"></div>
+                    </div>
+
+                    <!-- 选择Issue卡片 -->
+                    <div class="card">
+                        <h2 class="section-title">
+                            <i class="fa fa-search"></i> Select Existing Issue
+                        </h2>
+                        <div class="form-group">
+                            <label for="existing-issue-key">Issue Key</label>
+                            <input type="text" id="existing-issue-key" placeholder="e.g., ARCH-123" required>
+                        </div>
+                        <button id="select-issue-btn" class="btn btn-info btn-block">
+                            <i class="fa fa-search"></i> Select Issue
+                        </button>
+                        <div id="select-issue-status" class="status-message"></div>
+                    </div>
+                </div>
+
+                <!-- Issue详情区（选择Issue后显示） -->
+                <div id="issue-details" class="card hidden">
+                    <div class="issue-header">
+                        <h2 class="issue-key" id="display-issue-key"></h2>
+                        <h3 class="issue-summary" id="display-issue-summary"></h3>
+                        <div class="issue-meta">
+                            <span class="meta-item"><i class="fa fa-user"></i> Assignee: <span id="display-assignee"></span></span>
+                            <span class="meta-item"><i class="fa fa-calendar"></i> Created: <span id="display-created-date"></span></span>
+                        </div>
+                    </div>
+
+                    <div class="issue-content">
+                        <div class="state-card">
+                            <h3>Current State</h3>
+                            <div class="state-badge" id="current-state-badge"></div>
+                            <p class="state-description" id="current-state-description"></p>
+                        </div>
+
+                        <div class="transition-section">
+                            <h3>Available Transitions</h3>
+                            <div id="transition-buttons" class="button-group"></div>
+                            <div id="transition-status" class="status-message"></div>
+                        </div>
+
+                        <div class="description-section">
+                            <h3>Description</h3>
+                            <div class="description-content" id="display-issue-description"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <p>Jira Workflow Manager &copy; 2024 | Built with Flask & Jira API</p>
+        </footer>
     </div>
 
-    <!-- Create Issue Form (initially hidden) -->
-    <div id="create-issue-form" class="card hidden">
-        <h3>Create New Architecture Decision</h3>
-        <div class="form-group">
-            <label for="project-key">Project Key</label>
-            <input type="text" id="project-key" placeholder="e.g., ARCH" required>
-        </div>
-        <div class="form-group">
-            <label for="issue-summary">Summary</label>
-            <input type="text" id="issue-summary" placeholder="Issue title" required>
-        </div>
-        <div class="form-group">
-            <label for="issue-description">Description</label>
-            <textarea id="issue-description" rows="3" placeholder="Detailed description"></textarea>
-        </div>
-        <button id="create-issue-btn" class="transition-btn">
-            <i class="fa fa-plus"></i> Create Issue
-        </button>
-        <div id="create-issue-status" class="status-message"></div>
-    </div>
-</div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
