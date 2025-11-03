@@ -1,88 +1,77 @@
+// Jira Integration
 document.addEventListener('DOMContentLoaded', () => {
-    // DOM Elements
-    const currentStateEl = document.getElementById('current-state');
-    const stateDescriptionEl = document.getElementById('state-description');
-    const transitionButtonsEl = document.getElementById('transition-buttons');
-    const historyListEl = document.getElementById('history-list');
-    const flowNodes = document.querySelectorAll('.flow-node');
+    // 原有代码保持不变...
 
-    // Get current state and update UI
-    function updateStateUI() {
-        fetch('/api/state')
-            .then(response => response.json())
-            .then(data => {
-                // Update state display
-                currentStateEl.textContent = data.state;
-                currentStateEl.className = `state-badge ${data.state}`;
-                stateDescriptionEl.textContent = data.description;
+    // Jira元素
+    const loginBtn = document.getElementById('login-btn');
+    const createIssueBtn = document.getElementById('create-issue-btn');
+    const loginStatus = document.getElementById('login-status');
+    const createIssueStatus = document.getElementById('create-issue-status');
+    const createIssueForm = document.getElementById('create-issue-form');
 
-                // Update flow diagram active state
-                flowNodes.forEach(node => {
-                    if (node.dataset.state === data.state) {
-                        node.classList.add('active');
-                    } else {
-                        node.classList.remove('active');
-                    }
-                });
+    // Jira登录
+    loginBtn.addEventListener('click', () => {
+        const server = document.getElementById('jira-server').value;
+        const email = document.getElementById('jira-email').value;
+        const apiToken = document.getElementById('jira-api-token').value;
 
-                // Update available action buttons
-                renderTransitionButtons(data.available_transitions);
-            })
-            .catch(error => console.error('Failed to fetch state:', error));
-    }
-
-    // Render transition buttons
-    function renderTransitionButtons(transitions) {
-        transitionButtonsEl.innerHTML = '';
-        
-        if (transitions.length === 0) {
-            transitionButtonsEl.innerHTML = '<p>No available actions for current state</p>';
-            return;
-        }
-
-        transitions.forEach(transition => {
-            const button = document.createElement('button');
-            button.className = 'transition-btn';
-            button.innerHTML = `<i class="fa fa-arrow-right"></i> ${transition.label}`;
-            button.addEventListener('click', () => triggerTransition(transition.trigger, transition.label));
-            transitionButtonsEl.appendChild(button);
-        });
-    }
-
-    // Trigger state transition
-    function triggerTransition(trigger, label) {
-        const previousState = currentStateEl.textContent;
-        
-        fetch('/api/transition', {
+        fetch('/api/jira/login', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ trigger: trigger })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ server, email, api_token: apiToken })
         })
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
             if (data.status === 'success') {
-                // Update history
-                addToHistory(`Transitioned from ${previousState} to ${data.new_state} (Action: ${label})`);
-                // Update UI
-                updateStateUI();
+                loginStatus.textContent = data.message;
+                loginStatus.className = 'status-message success';
+                createIssueForm.classList.remove('hidden'); // 显示创建issue表单
             } else {
-                alert(`Operation failed: ${data.message}`);
+                loginStatus.textContent = data.message;
+                loginStatus.className = 'status-message error';
             }
         })
-        .catch(error => console.error('Transition failed:', error));
-    }
+        .catch(err => {
+            loginStatus.textContent = 'Login failed: Network error';
+            loginStatus.className = 'status-message error';
+        });
+    });
 
-    // Add to history
-    function addToHistory(message) {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString();
-        const listItem = document.createElement('li');
-        listItem.innerHTML = `<span style="color: var(--secondary); font-size: 0.8rem;">${timeString}</span> ${message}`;
-        historyListEl.prepend(listItem);
-    }
+    // 创建Jira Issue
+    createIssueBtn.addEventListener('click', () => {
+        const projectKey = document.getElementById('project-key').value;
+        const summary = document.getElementById('issue-summary').value;
+        const description = document.getElementById('issue-description').value;
 
-    // Initialize
+        fetch('/api/jira/create-issue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_key: projectKey, summary, description })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                createIssueStatus.innerHTML = `
+                    Issue created successfully! 
+                    <br>Key: ${data.issue_key} 
+                    <br><a href="${data.issue_url}" target="_blank">View in Jira</a>
+                `;
+                createIssueStatus.className = 'status-message success';
+                // 重置表单
+                document.getElementById('project-key').value = '';
+                document.getElementById('issue-summary').value = '';
+                document.getElementById('issue-description').value = '';
+            } else {
+                createIssueStatus.textContent = data.message;
+                createIssueStatus.className = 'status-message error';
+            }
+        })
+        .catch(err => {
+            createIssueStatus.textContent = 'Failed to create issue: Network error';
+            createIssueStatus.className = 'status-message error';
+        });
+    });
+
+    // 初始化状态UI
     updateStateUI();
 });
