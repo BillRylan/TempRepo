@@ -1,201 +1,211 @@
-from flask import Flask, render_template, jsonify, request, session
-from jira import JIRA
-from jira.exceptions import JIRAError
+# app.py
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+import requests
+from requests.auth import HTTPBasicAuth
 import os
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # 会话管理密钥
+app.secret_key = os.urandom(24)  # 用于会话管理
 
-# 全局变量
-jira = None  # Jira连接实例
-selected_issue_key = None  # 当前选中的Issue Key
+# Jira API 基础配置
+JIRA_BASE_URL = ""  # 用户需要填写自己的 Jira 基础 URL
 
-# 状态描述映射（用于UI展示）
-STATE_DESCRIPTIONS = {
-    'OPEN': 'Initial state: Architecture decision proposal created',
-    'POC': 'Proof of Concept: Validating technical feasibility',
-    'SURGERY': 'Solution Design: Developing detailed implementation plan',
-    'IN_DEV': 'In Development: Implementation according to plan',
-    'TDA': 'Technical Decision Review: Internal technical assessment',
-    'TECH_FORUM': 'Technical Forum Review: Cross-team technical evaluation',
-    'UAT': 'User Acceptance Testing: Verifying requirements fulfillment',
-    'PROD': 'Production Deployment: Live in production environment',
-    'DONE': 'Completed: Workflow finalized'
-}
-
-# 路由定义
 @app.route('/')
 def index():
-    """渲染主页面"""
-    return render_template('index.html')
+    """首页路由 - 已登录则显示功能页面，否则显示登录页"""
+    if 'jira_auth' in session:
+        return render_template('dashboard.html')
+    return render_template('login.html')
 
-@app.route('/api/jira/login', methods=['POST'])
-def jira_login():
-    """Jira登录接口"""
-    global jira
-    data = request.json
-    server = data.get('server')
-    email = data.get('email')
-    api_token = data.get('api_token')
+@app.route('/login', methods=['POST'])
+def login():
+    """处理 Jira 登录请求"""
+    username = request.form.get('username')
+    api_token = request.form.get('api_token')
+    jira_url = request.form.get('jira_url')
     
-    if not all([server, email, api_token]):
-        return jsonify({'status': 'error', 'message': 'Missing login credentials'}), 400
+    # 验证输入
+    if not all([username, api_token, jira_url]):
+        return render_template('login.html', error="All fields are required")
     
+    # 保存 Jira URL 到会话
+    global JIRA_BASE_URL
+    JIRA_BASE_URL = jira_url.rstrip('/')
+    
+    # 尝试连接 Jira 验证凭据
     try:
-        # 建立Jira连接
-        jira = JIRA(server=server, basic_auth=(email, api_token))
-        user = jira.myself()
-        session['jira_logged_in'] = True
-        session['jira_user'] = user['displayName']
-        return jsonify({
-            'status': 'success',
-            'message': f"Successfully logged in as {user['displayName']}",
-            'user': user['displayName']
-        })
-    except JIRAError as e:
-        return jsonify({'status': 'error', 'message': f"Login failed: {e.text}"}), 401
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Connection error: {str(e)}"}), 500
-
-@app.route('/api/jira/create-issue', methods=['POST'])
-def create_jira_issue():
-    """创建Jira Issue接口"""
-    global jira, selected_issue_key
-    if not jira or not session.get('jira_logged_in'):
-        return jsonify({'status': 'error', 'message': 'Please log in to Jira first'}), 401
-    
-    data = request.json
-    project_key = data.get('project_key')
-    summary = data.get('summary')
-    description = data.get('description', '')
-    
-    if not all([project_key, summary]):
-        return jsonify({'status': 'error', 'message': 'Project key and summary are required'}), 400
-    
-    try:
-        # 创建Issue（确保Issue类型在Jira中存在）
-        issue = jira.create_issue(
-            project={'key': project_key},
-            summary=summary,
-            description=description,
-            issuetype={'name': 'Architecture Decision'}  # 需与Jira中的Issue类型匹配
+        auth = HTTPBasicAuth(username, api_token)
+        headers = {"Accept": "application/json"}
+        
+        response = requests.get(
+            f"{JIRA_BASE_URL}/rest/api/3/myself",
+            headers=headers,
+            auth=auth
         )
-        selected_issue_key = issue.key
-        return jsonify({
-            'status': 'success',
-            'issue_key': issue.key,
-            'issue_url': issue.permalink(),
-            'message': f"Issue {issue.key} created successfully"
-        })
-    except JIRAError as e:
-        return jsonify({'status': 'error', 'message': f"Issue creation failed: {e.text}"}), 400
+        
+        if response.status_code == 200:
+            # 登录成功，保存凭据到会话
+            session['jira_auth'] = (username, api_token)
+            session['user_info'] = response.json()
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Invalid credentials or Jira URL")
+    
     except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
+        return render_template('login.html', error=f"Connection error: {str(e)}")
 
-@app.route('/api/jira/select-issue', methods=['POST'])
-def select_issue():
-    """选择已有Jira Issue接口"""
-    global jira, selected_issue_key
-    if not jira or not session.get('jira_logged_in'):
-        return jsonify({'status': 'error', 'message': 'Please log in to Jira first'}), 401
+@app.route('/logout')
+def logout():
+    """登出功能 - 清除会话"""
+    session.pop('jira_auth', None)
+    session.pop('user_info', None)
+    return redirect(url_for('index'))
+
+@app.route('/create-issue', methods=['GET', 'POST'])
+def create_issue():
+    """创建 Jira Issue 功能"""
+    if 'jira_auth' not in session:
+        return redirect(url_for('index'))
     
-    data = request.json
-    issue_key = data.get('issue_key')
+    username, api_token = session['jira_auth']
+    auth = HTTPBasicAuth(username, api_token)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
     
-    if not issue_key:
-        return jsonify({'status': 'error', 'message': 'Issue key is required'}), 400
+    # 获取项目列表（用于表单下拉选择）
+    projects = []
+    try:
+        response = requests.get(
+            f"{JIRA_BASE_URL}/rest/api/3/project",
+            headers=headers,
+            auth=auth
+        )
+        if response.status_code == 200:
+            projects = sorted(response.json(), key=lambda x: x['name'])
+    except Exception as e:
+        return render_template('create_issue.html', projects=[], error=f"Error fetching projects: {str(e)}")
+    
+    if request.method == 'POST':
+        # 处理创建 issue 请求
+        issue_data = {
+            "fields": {
+                "project": {
+                    "id": request.form.get('project_id')
+                },
+                "summary": request.form.get('summary'),
+                "description": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": request.form.get('description')
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "issuetype": {
+                    "name": request.form.get('issue_type')
+                }
+            }
+        }
+        
+        try:
+            response = requests.post(
+                f"{JIRA_BASE_URL}/rest/api/3/issue",
+                json=issue_data,
+                headers=headers,
+                auth=auth
+            )
+            
+            if response.status_code == 201:
+                issue = response.json()
+                return redirect(url_for('issue_detail', issue_key=issue['key']))
+            else:
+                return render_template('create_issue.html', 
+                                      projects=projects, 
+                                      error=f"Error creating issue: {response.text}")
+        except Exception as e:
+            return render_template('create_issue.html', 
+                                  projects=projects, 
+                                  error=f"Connection error: {str(e)}")
+    
+    # GET 请求 - 显示创建 issue 表单
+    return render_template('create_issue.html', projects=projects)
+
+@app.route('/issue/<issue_key>')
+def issue_detail(issue_key):
+    """显示指定 issue 的详细信息和状态转换选项"""
+    if 'jira_auth' not in session:
+        return redirect(url_for('index'))
+    
+    username, api_token = session['jira_auth']
+    auth = HTTPBasicAuth(username, api_token)
+    headers = {"Accept": "application/json"}
     
     try:
-        # 验证Issue存在
-        issue = jira.issue(issue_key)
-        selected_issue_key = issue_key
-        return jsonify({
-            'status': 'success',
-            'issue_key': issue_key,
-            'issue_summary': issue.fields.summary,
-            'message': f"Issue {issue_key} selected successfully"
-        })
-    except JIRAError as e:
-        return jsonify({'status': 'error', 'message': f"Issue not found: {e.text}"}), 404
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
-
-@app.route('/api/jira/issue-details', methods=['GET'])
-def get_issue_details():
-    """获取当前选中Issue的详细信息（状态及可用过渡）"""
-    global jira, selected_issue_key
-    if not jira or not session.get('jira_logged_in') or not selected_issue_key:
-        return jsonify({'status': 'error', 'message': 'Please log in and select an issue first'}), 401
-    
-    try:
-        # 获取Issue详情
-        issue = jira.issue(selected_issue_key)
-        current_status = issue.fields.status.name
-        current_assignee = issue.fields.assignee.displayName if issue.fields.assignee else 'Unassigned'
-        created_date = datetime.strptime(issue.fields.created, '%Y-%m-%dT%H:%M:%S.%f%z').strftime('%Y-%m-%d %H:%M:%S')
+        # 获取 issue 详情
+        issue_response = requests.get(
+            f"{JIRA_BASE_URL}/rest/api/3/issue/{issue_key}?expand=transitions",
+            headers=headers,
+            auth=auth
+        )
         
-        # 获取可用状态过渡
-        transitions = jira.transitions(issue)
-        available_transitions = [
-            {
-                'id': t['id'],
-                'name': t['name'],
-                'to_state': t['to']['name']
-            } for t in transitions
-        ]
+        if issue_response.status_code != 200:
+            return render_template('issue_detail.html', 
+                                  error=f"Error fetching issue: {issue_response.text}")
         
-        return jsonify({
-            'status': 'success',
-            'issue_key': selected_issue_key,
-            'summary': issue.fields.summary,
-            'description': issue.fields.description or 'No description provided',
-            'current_state': {
-                'name': current_status,
-                'description': STATE_DESCRIPTIONS.get(current_status, f"State: {current_status}")
-            },
-            'assignee': current_assignee,
-            'created_date': created_date,
-            'available_transitions': available_transitions
-        })
-    except JIRAError as e:
-        return jsonify({'status': 'error', 'message': f"Failed to get issue details: {e.text}"}), 400
+        issue_data = issue_response.json()
+        return render_template('issue_detail.html', 
+                              issue=issue_data,
+                              issue_key=issue_key)
+    
     except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
+        return render_template('issue_detail.html', 
+                              error=f"Connection error: {str(e)}")
 
-@app.route('/api/jira/transition-issue', methods=['POST'])
-def transition_issue():
-    """触发Issue状态流转接口"""
-    global jira, selected_issue_key
-    if not jira or not session.get('jira_logged_in') or not selected_issue_key:
-        return jsonify({'status': 'error', 'message': 'Please log in and select an issue first'}), 401
+@app.route('/transition-issue/<issue_key>', methods=['POST'])
+def transition_issue(issue_key):
+    """处理 issue 状态转换"""
+    if 'jira_auth' not in session:
+        return jsonify({"status": "error", "message": "Not authenticated"}), 401
     
-    data = request.json
-    transition_id = data.get('transition_id')
-    
+    transition_id = request.json.get('transition_id')
     if not transition_id:
-        return jsonify({'status': 'error', 'message': 'Transition ID is required'}), 400
+        return jsonify({"status": "error", "message": "Transition ID required"}), 400
+    
+    username, api_token = session['jira_auth']
+    auth = HTTPBasicAuth(username, api_token)
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
     
     try:
-        # 执行状态流转
-        issue = jira.issue(selected_issue_key)
-        previous_state = issue.fields.status.name
-        jira.transition_issue(issue, transition_id)
+        response = requests.post(
+            f"{JIRA_BASE_URL}/rest/api/3/issue/{issue_key}/transitions",
+            json={"transition": {"id": transition_id}},
+            headers=headers,
+            auth=auth
+        )
         
-        # 获取流转后的状态
-        updated_issue = jira.issue(selected_issue_key)
-        new_state = updated_issue.fields.status.name
-        
-        return jsonify({
-            'status': 'success',
-            'previous_state': previous_state,
-            'new_state': new_state,
-            'message': f"Issue status updated from {previous_state} to {new_state}"
-        })
-    except JIRAError as e:
-        return jsonify({'status': 'error', 'message': f"Transition failed: {e.text}"}), 400
+        if response.status_code in [200, 204]:
+            return jsonify({"status": "success", "message": "Transition successful"})
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": f"Transition failed: {response.text}"
+            }), response.status_code
+    
     except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
