@@ -1,0 +1,123 @@
+from flask import Flask, render_template, jsonify, request
+from transitions import Machine
+
+app = Flask(__name__)
+
+# Define Architecture Decision workflow state machine
+class ArchitectureWorkflow:
+    def __init__(self):
+        # State definitions
+        self.states = [
+            'OPEN', 'POC', 'SURGERY', 'IN_DEV', 
+            'TDA', 'TECH_FORUM', 'UAT', 'PROD', 'DONE'
+        ]
+        
+        # Transition rules
+        self.transitions = [
+            {'trigger': 'to_poc', 'source': 'OPEN', 'dest': 'POC'},
+            {'trigger': 'to_surgery', 'source': 'POC', 'dest': 'SURGERY'},
+            {'trigger': 'poc_retry', 'source': 'POC', 'dest': 'POC'},
+            {'trigger': 'to_in_dev', 'source': 'SURGERY', 'dest': 'IN_DEV'},
+            {'trigger': 'surgery_to_poc', 'source': 'SURGERY', 'dest': 'POC'},
+            {'trigger': 'to_tda', 'source': 'IN_DEV', 'dest': 'TDA'},
+            {'trigger': 'dev_retry', 'source': 'IN_DEV', 'dest': 'IN_DEV'},
+            {'trigger': 'to_tech_forum', 'source': 'TDA', 'dest': 'TECH_FORUM'},
+            {'trigger': 'tda_to_dev', 'source': 'TDA', 'dest': 'IN_DEV'},
+            {'trigger': 'to_uat', 'source': 'TECH_FORUM', 'dest': 'UAT'},
+            {'trigger': 'tech_to_tda', 'source': 'TECH_FORUM', 'dest': 'TDA'},
+            {'trigger': 'to_prod', 'source': 'UAT', 'dest': 'PROD'},
+            {'trigger': 'uat_to_tech', 'source': 'UAT', 'dest': 'TECH_FORUM'},
+            {'trigger': 'to_done', 'source': 'PROD', 'dest': 'DONE'},
+            {'trigger': 'prod_to_uat', 'source': 'PROD', 'dest': 'UAT'},
+            {'trigger': 'force_done', 'source': '*', 'dest': 'DONE'}
+        ]
+        
+        # Initialize state machine
+        self.machine = Machine(
+            model=self,
+            states=self.states,
+            transitions=self.transitions,
+            initial='OPEN'
+        )
+
+# Create global workflow instance
+workflow = ArchitectureWorkflow()
+
+# State description mapping (for frontend display)
+state_descriptions = {
+    'OPEN': 'Initial state: Architecture decision proposal created',
+    'POC': 'Proof of Concept: Validating technical feasibility',
+    'SURGERY': 'Solution Design: Developing detailed implementation plan',
+    'IN_DEV': 'In Development: Implementation according to plan',
+    'TDA': 'Technical Decision Review: Internal technical assessment',
+    'TECH_FORUM': 'Technical Forum Review: Cross-team technical evaluation',
+    'UAT': 'User Acceptance Testing: Verifying requirements fulfillment',
+    'PROD': 'Production Deployment: Live in production environment',
+    'DONE': 'Completed: Workflow finalized'
+}
+
+# Transition button mapping (for frontend display)
+transition_labels = {
+    'to_poc': 'Proceed to POC',
+    'to_surgery': 'Proceed to Design',
+    'poc_retry': 'Retry POC',
+    'to_in_dev': 'Proceed to Development',
+    'surgery_to_poc': 'Return to POC',
+    'to_tda': 'Proceed to Tech Review',
+    'dev_retry': 'Continue Development',
+    'to_tech_forum': 'Proceed to Tech Forum',
+    'tda_to_dev': 'Return to Development',
+    'to_uat': 'Proceed to UAT',
+    'tech_to_tda': 'Return to TDA',
+    'to_prod': 'Deploy to Production',
+    'uat_to_tech': 'Return to Tech Forum',
+    'to_done': 'Mark as Completed',
+    'prod_to_uat': 'Return to UAT',
+    'force_done': 'Force Complete Workflow'
+}
+
+@app.route('/')
+def index():
+    """Render main page"""
+    return render_template('index.html')
+
+@app.route('/api/state', methods=['GET'])
+def get_current_state():
+    """Get current state information"""
+    current_state = workflow.state
+    return jsonify({
+        'state': current_state,
+        'description': state_descriptions.get(current_state, ''),
+        'available_transitions': [
+            {
+                'trigger': t.name,
+                'label': transition_labels.get(t.name, t.name)
+            } 
+            for t in workflow.machine.get_triggers(current_state)
+        ]
+    })
+
+@app.route('/api/transition', methods=['POST'])
+def trigger_transition():
+    """Trigger state transition"""
+    data = request.json
+    trigger = data.get('trigger')
+    
+    if not trigger:
+        return jsonify({'status': 'error', 'message': 'Missing transition trigger'}), 400
+    
+    try:
+        # Trigger state transition
+        if hasattr(workflow, trigger):
+            getattr(workflow, trigger)()
+            return jsonify({
+                'status': 'success',
+                'new_state': workflow.state,
+                'description': state_descriptions.get(workflow.state, '')
+            })
+        return jsonify({'status': 'error', 'message': 'Invalid transition trigger'}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
