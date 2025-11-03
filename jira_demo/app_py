@@ -1,18 +1,20 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session
 from transitions import Machine
+from jira import JIRA
+from jira.exceptions import JIRAError
+import os
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # 用于会话管理的密钥
 
-# Define Architecture Decision workflow state machine
+# Jira工作流状态机定义（与之前相同）
 class ArchitectureWorkflow:
     def __init__(self):
-        # State definitions
         self.states = [
             'OPEN', 'POC', 'SURGERY', 'IN_DEV', 
             'TDA', 'TECH_FORUM', 'UAT', 'PROD', 'DONE'
         ]
         
-        # Transition rules
         self.transitions = [
             {'trigger': 'to_poc', 'source': 'OPEN', 'dest': 'POC'},
             {'trigger': 'to_surgery', 'source': 'POC', 'dest': 'SURGERY'},
@@ -32,7 +34,6 @@ class ArchitectureWorkflow:
             {'trigger': 'force_done', 'source': '*', 'dest': 'DONE'}
         ]
         
-        # Initialize state machine
         self.machine = Machine(
             model=self,
             states=self.states,
@@ -40,10 +41,11 @@ class ArchitectureWorkflow:
             initial='OPEN'
         )
 
-# Create global workflow instance
+# 全局工作流实例和Jira连接
 workflow = ArchitectureWorkflow()
+jira = None  # Jira连接实例将在登录后初始化
 
-# State description mapping (for frontend display)
+# 状态和过渡的描述映射
 state_descriptions = {
     'OPEN': 'Initial state: Architecture decision proposal created',
     'POC': 'Proof of Concept: Validating technical feasibility',
@@ -56,7 +58,6 @@ state_descriptions = {
     'DONE': 'Completed: Workflow finalized'
 }
 
-# Transition button mapping (for frontend display)
 transition_labels = {
     'to_poc': 'Proceed to POC',
     'to_surgery': 'Proceed to Design',
@@ -76,14 +77,76 @@ transition_labels = {
     'force_done': 'Force Complete Workflow'
 }
 
+# 路由定义
 @app.route('/')
 def index():
-    """Render main page"""
     return render_template('index.html')
 
+# Jira登录功能
+@app.route('/api/jira/login', methods=['POST'])
+def jira_login():
+    global jira
+    data = request.json
+    server = data.get('server')
+    email = data.get('email')
+    api_token = data.get('api_token')
+    
+    if not all([server, email, api_token]):
+        return jsonify({'status': 'error', 'message': 'Missing login credentials'}), 400
+    
+    try:
+        # 尝试连接Jira
+        jira = JIRA(server=server, basic_auth=(email, api_token))
+        # 验证连接成功（获取当前用户信息）
+        user = jira.myself()
+        session['jira_logged_in'] = True
+        session['jira_server'] = server
+        return jsonify({
+            'status': 'success',
+            'message': f"Successfully logged in as {user['displayName']}"
+        })
+    except JIRAError as e:
+        return jsonify({'status': 'error', 'message': f"Login failed: {e.text}"}), 401
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f"Connection error: {str(e)}"}), 500
+
+# 创建新Issue功能
+@app.route('/api/jira/create-issue', methods=['POST'])
+def create_jira_issue():
+    global jira
+    if not jira or not session.get('jira_logged_in'):
+        return jsonify({'status': 'error', 'message': 'Please log in to Jira first'}), 401
+    
+    data = request.json
+    project_key = data.get('project_key')
+    summary = data.get('summary')
+    description = data.get('description', '')
+    
+    if not all([project_key, summary]):
+        return jsonify({'status': 'error', 'message': 'Project key and summary are required'}), 400
+    
+    try:
+        # 创建Architecture Decision类型的issue（假设issue类型名称为"Architecture Decision"）
+        issue = jira.create_issue(
+            project={'key': project_key},
+            summary=summary,
+            description=description,
+            issuetype={'name': 'Architecture Decision'},
+            status={'name': 'OPEN'}  # 初始状态设置为OPEN
+        )
+        return jsonify({
+            'status': 'success',
+            'issue_key': issue.key,
+            'issue_url': issue.permalink()
+        })
+    except JIRAError as e:
+        return jsonify({'status': 'error', 'message': f"Issue creation failed: {e.text}"}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
+
+# 获取当前状态
 @app.route('/api/state', methods=['GET'])
 def get_current_state():
-    """Get current state information"""
     current_state = workflow.state
     return jsonify({
         'state': current_state,
@@ -97,9 +160,9 @@ def get_current_state():
         ]
     })
 
+# 触发状态过渡
 @app.route('/api/transition', methods=['POST'])
 def trigger_transition():
-    """Trigger state transition"""
     data = request.json
     trigger = data.get('trigger')
     
@@ -107,7 +170,6 @@ def trigger_transition():
         return jsonify({'status': 'error', 'message': 'Missing transition trigger'}), 400
     
     try:
-        # Trigger state transition
         if hasattr(workflow, trigger):
             getattr(workflow, trigger)()
             return jsonify({
