@@ -1,52 +1,18 @@
 from flask import Flask, render_template, jsonify, request, session
-from transitions import Machine
 from jira import JIRA
 from jira.exceptions import JIRAError
 import os
+from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # 用于会话管理的密钥
+app.secret_key = os.urandom(24)  # 会话管理密钥
 
-# Jira工作流状态机定义（与之前相同）
-class ArchitectureWorkflow:
-    def __init__(self):
-        self.states = [
-            'OPEN', 'POC', 'SURGERY', 'IN_DEV', 
-            'TDA', 'TECH_FORUM', 'UAT', 'PROD', 'DONE'
-        ]
-        
-        self.transitions = [
-            {'trigger': 'to_poc', 'source': 'OPEN', 'dest': 'POC'},
-            {'trigger': 'to_surgery', 'source': 'POC', 'dest': 'SURGERY'},
-            {'trigger': 'poc_retry', 'source': 'POC', 'dest': 'POC'},
-            {'trigger': 'to_in_dev', 'source': 'SURGERY', 'dest': 'IN_DEV'},
-            {'trigger': 'surgery_to_poc', 'source': 'SURGERY', 'dest': 'POC'},
-            {'trigger': 'to_tda', 'source': 'IN_DEV', 'dest': 'TDA'},
-            {'trigger': 'dev_retry', 'source': 'IN_DEV', 'dest': 'IN_DEV'},
-            {'trigger': 'to_tech_forum', 'source': 'TDA', 'dest': 'TECH_FORUM'},
-            {'trigger': 'tda_to_dev', 'source': 'TDA', 'dest': 'IN_DEV'},
-            {'trigger': 'to_uat', 'source': 'TECH_FORUM', 'dest': 'UAT'},
-            {'trigger': 'tech_to_tda', 'source': 'TECH_FORUM', 'dest': 'TDA'},
-            {'trigger': 'to_prod', 'source': 'UAT', 'dest': 'PROD'},
-            {'trigger': 'uat_to_tech', 'source': 'UAT', 'dest': 'TECH_FORUM'},
-            {'trigger': 'to_done', 'source': 'PROD', 'dest': 'DONE'},
-            {'trigger': 'prod_to_uat', 'source': 'PROD', 'dest': 'UAT'},
-            {'trigger': 'force_done', 'source': '*', 'dest': 'DONE'}
-        ]
-        
-        self.machine = Machine(
-            model=self,
-            states=self.states,
-            transitions=self.transitions,
-            initial='OPEN'
-        )
+# 全局变量
+jira = None  # Jira连接实例
+selected_issue_key = None  # 当前选中的Issue Key
 
-# 全局工作流实例和Jira连接
-workflow = ArchitectureWorkflow()
-jira = None  # Jira连接实例将在登录后初始化
-
-# 状态和过渡的描述映射
-state_descriptions = {
+# 状态描述映射（用于UI展示）
+STATE_DESCRIPTIONS = {
     'OPEN': 'Initial state: Architecture decision proposal created',
     'POC': 'Proof of Concept: Validating technical feasibility',
     'SURGERY': 'Solution Design: Developing detailed implementation plan',
@@ -58,33 +24,15 @@ state_descriptions = {
     'DONE': 'Completed: Workflow finalized'
 }
 
-transition_labels = {
-    'to_poc': 'Proceed to POC',
-    'to_surgery': 'Proceed to Design',
-    'poc_retry': 'Retry POC',
-    'to_in_dev': 'Proceed to Development',
-    'surgery_to_poc': 'Return to POC',
-    'to_tda': 'Proceed to Tech Review',
-    'dev_retry': 'Continue Development',
-    'to_tech_forum': 'Proceed to Tech Forum',
-    'tda_to_dev': 'Return to Development',
-    'to_uat': 'Proceed to UAT',
-    'tech_to_tda': 'Return to TDA',
-    'to_prod': 'Deploy to Production',
-    'uat_to_tech': 'Return to Tech Forum',
-    'to_done': 'Mark as Completed',
-    'prod_to_uat': 'Return to UAT',
-    'force_done': 'Force Complete Workflow'
-}
-
 # 路由定义
 @app.route('/')
 def index():
+    """渲染主页面"""
     return render_template('index.html')
 
-# Jira登录功能
 @app.route('/api/jira/login', methods=['POST'])
 def jira_login():
+    """Jira登录接口"""
     global jira
     data = request.json
     server = data.get('server')
@@ -95,25 +43,25 @@ def jira_login():
         return jsonify({'status': 'error', 'message': 'Missing login credentials'}), 400
     
     try:
-        # 尝试连接Jira
+        # 建立Jira连接
         jira = JIRA(server=server, basic_auth=(email, api_token))
-        # 验证连接成功（获取当前用户信息）
         user = jira.myself()
         session['jira_logged_in'] = True
-        session['jira_server'] = server
+        session['jira_user'] = user['displayName']
         return jsonify({
             'status': 'success',
-            'message': f"Successfully logged in as {user['displayName']}"
+            'message': f"Successfully logged in as {user['displayName']}",
+            'user': user['displayName']
         })
     except JIRAError as e:
         return jsonify({'status': 'error', 'message': f"Login failed: {e.text}"}), 401
     except Exception as e:
         return jsonify({'status': 'error', 'message': f"Connection error: {str(e)}"}), 500
 
-# 创建新Issue功能
 @app.route('/api/jira/create-issue', methods=['POST'])
 def create_jira_issue():
-    global jira
+    """创建Jira Issue接口"""
+    global jira, selected_issue_key
     if not jira or not session.get('jira_logged_in'):
         return jsonify({'status': 'error', 'message': 'Please log in to Jira first'}), 401
     
@@ -126,60 +74,128 @@ def create_jira_issue():
         return jsonify({'status': 'error', 'message': 'Project key and summary are required'}), 400
     
     try:
-        # 创建Architecture Decision类型的issue（假设issue类型名称为"Architecture Decision"）
+        # 创建Issue（确保Issue类型在Jira中存在）
         issue = jira.create_issue(
             project={'key': project_key},
             summary=summary,
             description=description,
-            issuetype={'name': 'Architecture Decision'},
-            status={'name': 'OPEN'}  # 初始状态设置为OPEN
+            issuetype={'name': 'Architecture Decision'}  # 需与Jira中的Issue类型匹配
         )
+        selected_issue_key = issue.key
         return jsonify({
             'status': 'success',
             'issue_key': issue.key,
-            'issue_url': issue.permalink()
+            'issue_url': issue.permalink(),
+            'message': f"Issue {issue.key} created successfully"
         })
     except JIRAError as e:
         return jsonify({'status': 'error', 'message': f"Issue creation failed: {e.text}"}), 400
     except Exception as e:
         return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
 
-# 获取当前状态
-@app.route('/api/state', methods=['GET'])
-def get_current_state():
-    current_state = workflow.state
-    return jsonify({
-        'state': current_state,
-        'description': state_descriptions.get(current_state, ''),
-        'available_transitions': [
-            {
-                'trigger': t.name,
-                'label': transition_labels.get(t.name, t.name)
-            } 
-            for t in workflow.machine.get_triggers(current_state)
-        ]
-    })
-
-# 触发状态过渡
-@app.route('/api/transition', methods=['POST'])
-def trigger_transition():
-    data = request.json
-    trigger = data.get('trigger')
+@app.route('/api/jira/select-issue', methods=['POST'])
+def select_issue():
+    """选择已有Jira Issue接口"""
+    global jira, selected_issue_key
+    if not jira or not session.get('jira_logged_in'):
+        return jsonify({'status': 'error', 'message': 'Please log in to Jira first'}), 401
     
-    if not trigger:
-        return jsonify({'status': 'error', 'message': 'Missing transition trigger'}), 400
+    data = request.json
+    issue_key = data.get('issue_key')
+    
+    if not issue_key:
+        return jsonify({'status': 'error', 'message': 'Issue key is required'}), 400
     
     try:
-        if hasattr(workflow, trigger):
-            getattr(workflow, trigger)()
-            return jsonify({
-                'status': 'success',
-                'new_state': workflow.state,
-                'description': state_descriptions.get(workflow.state, '')
-            })
-        return jsonify({'status': 'error', 'message': 'Invalid transition trigger'}), 400
+        # 验证Issue存在
+        issue = jira.issue(issue_key)
+        selected_issue_key = issue_key
+        return jsonify({
+            'status': 'success',
+            'issue_key': issue_key,
+            'issue_summary': issue.fields.summary,
+            'message': f"Issue {issue_key} selected successfully"
+        })
+    except JIRAError as e:
+        return jsonify({'status': 'error', 'message': f"Issue not found: {e.text}"}), 404
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
+
+@app.route('/api/jira/issue-details', methods=['GET'])
+def get_issue_details():
+    """获取当前选中Issue的详细信息（状态及可用过渡）"""
+    global jira, selected_issue_key
+    if not jira or not session.get('jira_logged_in') or not selected_issue_key:
+        return jsonify({'status': 'error', 'message': 'Please log in and select an issue first'}), 401
+    
+    try:
+        # 获取Issue详情
+        issue = jira.issue(selected_issue_key)
+        current_status = issue.fields.status.name
+        current_assignee = issue.fields.assignee.displayName if issue.fields.assignee else 'Unassigned'
+        created_date = datetime.strptime(issue.fields.created, '%Y-%m-%dT%H:%M:%S.%f%z').strftime('%Y-%m-%d %H:%M:%S')
+        
+        # 获取可用状态过渡
+        transitions = jira.transitions(issue)
+        available_transitions = [
+            {
+                'id': t['id'],
+                'name': t['name'],
+                'to_state': t['to']['name']
+            } for t in transitions
+        ]
+        
+        return jsonify({
+            'status': 'success',
+            'issue_key': selected_issue_key,
+            'summary': issue.fields.summary,
+            'description': issue.fields.description or 'No description provided',
+            'current_state': {
+                'name': current_status,
+                'description': STATE_DESCRIPTIONS.get(current_status, f"State: {current_status}")
+            },
+            'assignee': current_assignee,
+            'created_date': created_date,
+            'available_transitions': available_transitions
+        })
+    except JIRAError as e:
+        return jsonify({'status': 'error', 'message': f"Failed to get issue details: {e.text}"}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
+
+@app.route('/api/jira/transition-issue', methods=['POST'])
+def transition_issue():
+    """触发Issue状态流转接口"""
+    global jira, selected_issue_key
+    if not jira or not session.get('jira_logged_in') or not selected_issue_key:
+        return jsonify({'status': 'error', 'message': 'Please log in and select an issue first'}), 401
+    
+    data = request.json
+    transition_id = data.get('transition_id')
+    
+    if not transition_id:
+        return jsonify({'status': 'error', 'message': 'Transition ID is required'}), 400
+    
+    try:
+        # 执行状态流转
+        issue = jira.issue(selected_issue_key)
+        previous_state = issue.fields.status.name
+        jira.transition_issue(issue, transition_id)
+        
+        # 获取流转后的状态
+        updated_issue = jira.issue(selected_issue_key)
+        new_state = updated_issue.fields.status.name
+        
+        return jsonify({
+            'status': 'success',
+            'previous_state': previous_state,
+            'new_state': new_state,
+            'message': f"Issue status updated from {previous_state} to {new_state}"
+        })
+    except JIRAError as e:
+        return jsonify({'status': 'error', 'message': f"Transition failed: {e.text}"}), 400
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
