@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from jira import JIRA
 from jira.exceptions import JIRAError
