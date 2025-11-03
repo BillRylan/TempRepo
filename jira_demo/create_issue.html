@@ -1,0 +1,71 @@
+<!-- templates/create_issue.html -->
+{% extends "base.html" %}
+
+{% block title %} - Create Issue{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Create New Jira Issue</h1>
+        <p class="text-gray-600">Fill in the details below to create a new issue in your Jira project.</p>
+    </div>
+    
+    {% if error %}
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <form method="POST">
+            <div class="mb-4">
+                <label for="project_id" class="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                <select name="project_id" id="project_id" required
+                        class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
+                    <option value="">Select a project</option>
+                    {% for project in projects %}
+                    <option value="{{ project.id }}">{{ project.name }} ({{ project.key }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label for="issue_type" class="block text-sm font-medium text-gray-700 mb-1">Issue Type</label>
+                <select name="issue_type" id="issue_type" required
+                        class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
+                    <option value="Bug">Bug</option>
+                    <option value="Task">Task</option>
+                    <option value="Story">Story</option>
+                    <option value="Epic">Epic</option>
+                    <option value="Improvement">Improvement</option>
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label for="summary" class="block text-sm font-medium text-gray-700 mb-1">Summary</label>
+                <input type="text" name="summary" id="summary" required
+                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                       placeholder="Brief summary of the issue">
+            </div>
+            
+            <div class="mb-6">
+                <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea name="description" id="description" rows="4"
+                          class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                          placeholder="Detailed description of the issue"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <a href="{{ url_for('index') }}" 
+                   class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
+                    Cancel
+                </a>
+                <button type="submit" 
+                        class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
+                    <i class="fa fa-plus mr-1"></i> Create Issue
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
