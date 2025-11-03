@@ -1,74 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jira Workflow Transition Demo</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <h1>Architecture Decision Workflow Demo</h1>
-            <p class="subtitle">Visual State Transition Management System</p>
-        </header>
-
-        <!-- Main Content -->
-        <main>
-            <!-- State Card -->
-            <div class="state-card">
-                <div class="state-header">
-                    <h2>Current State</h2>
-                    <span id="current-state" class="state-badge">LOADING</span>
-                </div>
-                <div class="state-description">
-                    <p id="state-description">Loading...</p>
-                </div>
-            </div>
-
-            <!-- Flow Diagram -->
-            <div class="flow-diagram">
-                <h3>Workflow State Diagram</h3>
-                <div class="flow-nodes">
-                    <!-- State nodes will be dynamically activated via JS -->
-                    <div class="flow-node" data-state="OPEN">OPEN</div>
-                    <div class="flow-node" data-state="POC">POC</div>
-                    <div class="flow-node" data-state="SURGERY">SURGERY</div>
-                    <div class="flow-node" data-state="IN_DEV">IN DEV</div>
-                    <div class="flow-node" data-state="TDA">TDA</div>
-                    <div class="flow-node" data-state="TECH_FORUM">TECH FORUM</div>
-                    <div class="flow-node" data-state="UAT">UAT</div>
-                    <div class="flow-node" data-state="PROD">PROD</div>
-                    <div class="flow-node" data-state="DONE">DONE</div>
-                </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="actions">
-                <h3>Available Actions</h3>
-                <div id="transition-buttons" class="button-group">
-                    <!-- Buttons will be dynamically generated via JS -->
-                    <p class="loading">Loading available actions...</p>
-                </div>
-            </div>
-
-            <!-- State History -->
-            <div class="history">
-                <h3>State Change History</h3>
-                <ul id="history-list">
-                    <li>Workflow started in OPEN state</li>
-                </ul>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <footer>
-            <p>Jira Workflow Demo System &copy; 2023</p>
-        </footer>
+<!-- Jira Integration Section -->
+<div class="jira-integration">
+    <h2>Jira Integration</h2>
+    
+    <!-- Login Form -->
+    <div class="jira-login-form card">
+        <h3>Jira Login</h3>
+        <div class="form-group">
+            <label for="jira-server">Jira Server URL</label>
+            <input type="url" id="jira-server" placeholder="https://your-domain.atlassian.net" required>
+        </div>
+        <div class="form-group">
+            <label for="jira-email">Email</label>
+            <input type="email" id="jira-email" placeholder="your-email@example.com" required>
+        </div>
+        <div class="form-group">
+            <label for="jira-api-token">API Token</label>
+            <input type="password" id="jira-api-token" placeholder="Your Jira API Token" required>
+        </div>
+        <button id="login-btn" class="transition-btn">
+            <i class="fa fa-sign-in"></i> Login to Jira
+        </button>
+        <div id="login-status" class="status-message"></div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-</body>
-</html>
+    <!-- Create Issue Form (initially hidden) -->
+    <div id="create-issue-form" class="card hidden">
+        <h3>Create New Architecture Decision</h3>
+        <div class="form-group">
+            <label for="project-key">Project Key</label>
+            <input type="text" id="project-key" placeholder="e.g., ARCH" required>
+        </div>
+        <div class="form-group">
+            <label for="issue-summary">Summary</label>
+            <input type="text" id="issue-summary" placeholder="Issue title" required>
+        </div>
+        <div class="form-group">
+            <label for="issue-description">Description</label>
+            <textarea id="issue-description" rows="3" placeholder="Detailed description"></textarea>
+        </div>
+        <button id="create-issue-btn" class="transition-btn">
+            <i class="fa fa-plus"></i> Create Issue
+        </button>
+        <div id="create-issue-status" class="status-message"></div>
+    </div>
+</div>
