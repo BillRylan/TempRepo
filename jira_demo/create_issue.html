@@ -10,129 +10,65 @@
     </div>
     
     {% if error %}
-    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+    <div class="alert-error">
         {{ error }}
     </div>
     {% endif %}
     
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <form method="POST">
-            <div class="mb-4">
-                <label for="project_id" class="block text-sm font-medium text-gray-700 mb-1">Project <span class="text-danger">*</span></label>
-                <select name="project_id" id="project_id" required
-                        class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary">
-                    <option value="">Select a project</option>
-                    {% for project in projects %}
-                    <option value="{{ project.id }}">{{ project.name }} ({{ project.key }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div class="mb-4">
-                <label for="issue_type" class="block text-sm font-medium text-gray-700 mb-1">Issue Type <span class="text-danger">*</span></label>
-                <select name="issue_type" id="issue_type" required
-                        class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        disabled>
-                    <option value="">Select a project first</option>
-                </select>
-                <div id="issue_type_loading" class="hidden mt-1 text-sm text-gray-500">
-                    <i class="fa fa-spinner fa-spin"></i> Loading issue types...
+    <div class="card">
+        <div class="card-body">
+            <form method="POST">
+                <div class="mb-4">
+                    <label for="project_id" class="form-label">Project <span class="text-danger">*</span></label>
+                    <select name="project_id" id="project_id" required
+                            class="form-input">
+                        <option value="">Select a project</option>
+                        {% for project in projects %}
+                        <option value="{{ project.id }}">{{ project.name }} ({{ project.key }})</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div id="issue_type_error" class="hidden mt-1 text-sm text-danger"></div>
-            </div>
-            
-            <div class="mb-4">
-                <label for="summary" class="block text-sm font-medium text-gray-700 mb-1">Summary <span class="text-danger">*</span></label>
-                <input type="text" name="summary" id="summary" required
-                       class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                       placeholder="Brief summary of the issue">
-            </div>
-            
-            <div class="mb-6">
-                <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea name="description" id="description" rows="4"
-                          class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                          placeholder="Detailed description of the issue"></textarea>
-            </div>
-            
-            <div class="flex justify-end space-x-3">
-                <a href="{{ url_for('index') }}" 
-                   class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
-                    Cancel
-                </a>
-                <button type="submit" 
-                        class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
-                    <i class="fa fa-plus mr-1"></i> Create Issue
-                </button>
-            </div>
-        </form>
+                
+                <div class="mb-4">
+                    <label for="issue_type" class="form-label">Issue Type <span class="text-danger">*</span></label>
+                    <select name="issue_type" id="issue_type" required
+                            class="form-input" disabled>
+                        <option value="">Select a project first</option>
+                    </select>
+                    <div id="issue_type_loading" class="hidden mt-1 text-sm text-gray-500">
+                        <i class="fa fa-spinner fa-spin"></i> Loading issue types...
+                    </div>
+                    <div id="issue_type_error" class="hidden mt-1 text-sm text-danger"></div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="summary" class="form-label">Summary <span class="text-danger">*</span></label>
+                    <input type="text" name="summary" id="summary" required
+                           class="form-input"
+                           placeholder="Brief summary of the issue">
+                </div>
+                
+                <div class="mb-6">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea name="description" id="description" rows="4"
+                              class="form-input"
+                              placeholder="Detailed description of the issue"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <a href="{{ url_for('index') }}" class="btn-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn-primary">
+                        <i class="fa fa-plus mr-1"></i> Create Issue
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-// 当项目选择变化时，加载对应的Issue类型
-document.getElementById('project_id').addEventListener('change', function() {
-    const projectId = this.value;
-    const issueTypeSelect = document.getElementById('issue_type');
-    const loadingIndicator = document.getElementById('issue_type_loading');
-    const errorIndicator = document.getElementById('issue_type_error');
-    
-    // 重置状态
-    issueTypeSelect.innerHTML = '';
-    issueTypeSelect.disabled = true;
-    errorIndicator.classList.add('hidden');
-    
-    if (!projectId) {
-        // 未选择项目
-        issueTypeSelect.innerHTML = '<option value="">Select a project first</option>';
-        return;
-    }
-    
-    // 显示加载状态
-    loadingIndicator.classList.remove('hidden');
-    issueTypeSelect.innerHTML = '<option value="">Loading issue types...</option>';
-    
-    // 发送请求获取Issue类型
-    fetch(`{{ url_for('get_issue_types', project_id='') }}${projectId}`)
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.message || 'Failed to fetch issue types');
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            // 隐藏加载状态
-            loadingIndicator.classList.add('hidden');
-            
-            if (data.status === 'success' && data.issue_types && data.issue_types.length > 0) {
-                // 填充Issue类型
-                issueTypeSelect.innerHTML = '';
-                data.issue_types.forEach(type => {
-                    const option = document.createElement('option');
-                    option.value = type.id;  // 使用ID而不是名称，更可靠
-                    option.textContent = type.name;
-                    issueTypeSelect.appendChild(option);
-                });
-                issueTypeSelect.disabled = false;
-            } else {
-                // 没有可用的Issue类型
-                issueTypeSelect.innerHTML = '<option value="">No issue types available for this project</option>';
-                errorIndicator.textContent = data.message || 'No issue types available for this project';
-                errorIndicator.classList.remove('hidden');
-            }
-        })
-        .catch(error => {
-            // 处理错误
-            loadingIndicator.classList.add('hidden');
-            issueTypeSelect.innerHTML = '<option value="">Error loading issue types</option>';
-            errorIndicator.textContent = error.message;
-            errorIndicator.classList.remove('hidden');
-            console.error('Error:', error);
-        });
-});
-</script>
+<script src="{{ url_for('static', filename='js/create_issue.js') }}"></script>
 {% endblock %}
