@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jira Integration Tool{% block title %}{% endblock %}</title>
-    <!-- Tailwind CSS -->
+    <!-- 外部资源 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
-    <!-- 自定义 Tailwind 配置 -->
+    <!-- Tailwind 配置 -->
     <script>
         tailwind.config = {
             theme: {
@@ -31,22 +32,8 @@
             }
         }
     </script>
-    
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .content-auto {
-                content-visibility: auto;
-            }
-            .card-shadow {
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            }
-            .transition-custom {
-                transition: all 0.3s ease;
-            }
-        }
-    </style>
 </head>
-<body class="font-inter bg-gray-50 text-dark min-h-screen flex flex-col">
+<body>
     <!-- 导航栏 -->
     <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -61,8 +48,8 @@
                 <div class="flex items-center">
                     {% if 'jira_auth' in session %}
                         <div class="hidden md:flex items-center space-x-6 mr-4">
-                            <a href="{{ url_for('index') }}" class="text-gray-600 hover:text-primary transition-custom">Dashboard</a>
-                            <a href="{{ url_for('create_issue') }}" class="text-gray-600 hover:text-primary transition-custom">Create Issue</a>
+                            <a href="{{ url_for('index') }}" class="nav-link">Dashboard</a>
+                            <a href="{{ url_for('create_issue') }}" class="nav-link">Create Issue</a>
                         </div>
                         
                         <div class="flex items-center">
@@ -74,7 +61,7 @@
                             </a>
                         </div>
                     {% else %}
-                        <a href="{{ url_for('index') }}" class="text-gray-600 hover:text-primary transition-custom">Login</a>
+                        <a href="{{ url_for('index') }}" class="nav-link">Login</a>
                     {% endif %}
                 </div>
             </div>
@@ -95,7 +82,7 @@
         </div>
     </footer>
 
-    <!-- JavaScript -->
+    <!-- 页面特定脚本 -->
     {% block scripts %}{% endblock %}
 </body>
 </html>
