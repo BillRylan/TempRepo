@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="max-w-md mx-auto">
-    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div class="p-6">
+    <div class="card">
+        <div class="card-body">
             <div class="text-center mb-6">
                 <i class="fa fa-bug text-primary text-4xl mb-3"></i>
                 <h2 class="text-2xl font-bold text-gray-900">Jira Integration Tool</h2>
@@ -13,50 +13,49 @@
             </div>
             
             {% if error %}
-            <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <div class="alert-error">
                 {{ error }}
             </div>
             {% endif %}
             
             <form method="POST" action="{{ url_for('login') }}">
                 <div class="mb-4">
-                    <label for="jira_url" class="block text-sm font-medium text-gray-700 mb-1">Jira Base URL</label>
+                    <label for="jira_url" class="form-label">Jira Base URL</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fa fa-globe text-gray-400"></i>
                         </div>
                         <input type="url" name="jira_url" id="jira_url" 
-                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                               class="form-input pl-10"
                                placeholder="https://your-jira-instance.atlassian.net" required>
                     </div>
                 </div>
                 
                 <div class="mb-4">
-                    <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <label for="username" class="form-label">Username</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fa fa-user text-gray-400"></i>
                         </div>
                         <input type="text" name="username" id="username" 
-                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                               class="form-input pl-10"
                                placeholder="Your Jira username" required>
                     </div>
                 </div>
                 
                 <div class="mb-6">
-                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <label for="password" class="form-label">Password</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fa fa-lock text-gray-400"></i>
                         </div>
                         <input type="password" name="password" id="password" 
-                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                               class="form-input pl-10"
                                placeholder="Your Jira password" required>
                     </div>
                 </div>
                 
-                <button type="submit" 
-                        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
+                <button type="submit" class="w-full btn-primary flex justify-center">
                     <i class="fa fa-sign-in mr-2"></i> Sign in to Jira
                 </button>
             </form>
