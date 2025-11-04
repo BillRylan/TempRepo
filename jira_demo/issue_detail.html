@@ -9,10 +9,14 @@
             <h1 class="text-2xl font-bold text-gray-900">Issue {{ issue_key }}</h1>
             <p class="text-gray-600">Details and status transitions</p>
         </div>
-        <div class="mt-3 sm:mt-0">
+        <div class="mt-3 sm:mt-0 flex gap-3">
+            <button id="refresh-status" 
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
+                <i class="fa fa-refresh mr-2"></i> Refresh Status
+            </button>
             <a href="{{ url_for('index') }}" 
                class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom">
-                <i class="fa fa-arrow-left mr-2"></i> Back to Dashboard
+                <i class="fa fa-arrow-left mr-2"></i> Back
             </a>
         </div>
     </div>
@@ -27,7 +31,7 @@
             <div class="p-6">
                 <div class="flex flex-wrap justify-between items-start mb-6">
                     <div>
-                        <h2 class="text-xl font-bold text-gray-900 mb-2">{{ issue.fields.summary }}</h2>
+                        <h2 id="issue-summary" class="text-xl font-bold text-gray-900 mb-2">{{ issue.fields.summary }}</h2>
                         <div class="flex items-center text-sm text-gray-500">
                             <span class="mr-4">
                                 <i class="fa fa-folder-o mr-1"></i> {{ issue.fields.project.name }}
@@ -47,8 +51,11 @@
                             'Blocked': 'bg-red-100 text-red-800'
                         } %}
                         
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ status_color_map.get(issue.fields.status.name, 'bg-purple-100 text-purple-800') }}">
+                        <span id="current-status" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ status_color_map.get(issue.fields.status.name, 'bg-purple-100 text-purple-800') }}">
                             {{ issue.fields.status.name }}
+                        </span>
+                        <span id="last-updated" class="ml-2 text-xs text-gray-500">
+                            Updated: {{ issue.fields.updated[:16] }}
                         </span>
                     </div>
                 </div>
@@ -81,8 +88,17 @@
                     </div>
                     
                     <div>
-                        <p class="text-gray-500">Updated</p>
-                        <p class="font-medium">{{ issue.fields.updated[:10] }} {{ issue.fields.updated[11:16] }}</p>
+                        <p class="text-gray-500">Assignee</p>
+                        <p class="font-medium">
+                            {% if issue.fields.assignee %}
+                                {% if issue.fields.assignee.avatarUrls['48x48'] %}
+                                <img src="{{ issue.fields.assignee.avatarUrls['48x48'] }}" alt="{{ issue.fields.assignee.displayName }}" class="inline-block w-5 h-5 rounded-full mr-1">
+                                {% endif %}
+                                {{ issue.fields.assignee.displayName }}
+                            {% else %}
+                                Unassigned
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -93,18 +109,26 @@
             <div class="p-6">
                 <h3 class="text-lg font-semibold text-gray-900 mb-4">Available Status Transitions</h3>
                 
-                {% if issue.transitions and issue.transitions.transitions %}
-                <div class="flex flex-wrap gap-3">
-                    {% for transition in issue.transitions.transitions %}
-                    <button onclick="transitionIssue('{{ issue_key }}', {{ transition.id }}, this)"
-                            class="transition-btn px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-custom flex items-center">
-                        <i class="fa fa-exchange mr-2"></i> {{ transition.name }}
-                    </button>
-                    {% endfor %}
+                <div id="transitions-container">
+                    {% if transitions and transitions|length > 0 %}
+                    <div class="flex flex-wrap gap-3">
+                        {% for transition in transitions %}
+                        <button onclick="transitionIssue('{{ issue_key }}', {{ transition.id }}, this)"
+                                class="transition-btn px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-custom flex items-center">
+                            <i class="fa fa-exchange mr-2"></i> {{ transition.name }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-gray-500 italic">No available transitions for this issue.</p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <p class="text-gray-500 italic">No available transitions for this issue.</p>
-                {% endif %}
+                
+                <div id="transitions-loading" class="hidden mt-3">
+                    <i class="fa fa-spinner fa-spin text-gray-500"></i> Loading transitions...
+                </div>
+                
+                <div id="transitions-error" class="hidden mt-3 text-sm text-red-600"></div>
             </div>
         </div>
         {% endif %}
@@ -139,15 +163,23 @@ function transitionIssue(issueKey, transitionId, button) {
         return response.json();
     })
     .then(data => {
-        // 成功处理
-        button.innerHTML = '<i class="fa fa-check mr-2"></i> Success!';
-        button.classList.remove('border-primary', 'text-primary', 'bg-primary/5', 'hover:bg-primary/10');
-        button.classList.add('border-success', 'text-success', 'bg-success/5');
-        
-        // 1秒后刷新页面
-        setTimeout(() => {
-            window.location.reload();
-        }, 1000);
+        if (data.status === 'success') {
+            // 更新当前状态显示
+            updateStatusDisplay(data.current_status);
+            
+            // 更新可用转换列表
+            updateTransitionsList(data.transitions);
+            
+            // 显示成功消息
+            button.innerHTML = '<i class="fa fa-check mr-2"></i> Success!';
+            button.classList.remove('border-primary', 'text-primary', 'bg-primary/5', 'hover:bg-primary/10');
+            button.classList.add('border-success', 'text-success', 'bg-success/5');
+            
+            // 3秒后移除成功的按钮
+            setTimeout(() => {
+                button.remove();
+            }, 3000);
+        }
     })
     .catch(error => {
         // 错误处理
@@ -156,7 +188,8 @@ function transitionIssue(issueKey, transitionId, button) {
         button.classList.add('border-danger', 'text-danger', 'bg-danger/5');
         
         // 显示错误消息
-        alert(`Error: ${error.message}`);
+        document.getElementById('transitions-error').textContent = error.message;
+        document.getElementById('transitions-error').classList.remove('hidden');
         
         // 5秒后恢复按钮状态
         setTimeout(() => {
@@ -164,8 +197,107 @@ function transitionIssue(issueKey, transitionId, button) {
             button.disabled = false;
             button.classList.remove('border-danger', 'text-danger', 'bg-danger/5');
             button.classList.add('border-primary', 'text-primary', 'bg-primary/5', 'hover:bg-primary/10');
+            document.getElementById('transitions-error').classList.add('hidden');
         }, 5000);
     });
 }
+
+// 手动刷新状态和转换
+document.getElementById('refresh-status').addEventListener('click', function() {
+    const button = this;
+    const originalText = button.innerHTML;
+    const issueKey = '{{ issue_key }}';
+    
+    // 显示加载状态
+    button.disabled = true;
+    button.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> Refreshing...';
+    document.getElementById('transitions-loading').classList.remove('hidden');
+    
+    // 隐藏错误消息
+    document.getElementById('transitions-error').classList.add('hidden');
+    
+    // 请求最新状态
+    fetch(`{{ url_for('get_latest_issue_status', issue_key='') }}${issueKey}`)
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.message || 'Failed to refresh status');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                // 更新状态显示
+                updateStatusDisplay(data.current_status);
+                
+                // 更新转换列表
+                updateTransitionsList(data.transitions);
+                
+                // 更新其他信息
+                document.getElementById('issue-summary').textContent = data.summary;
+                document.getElementById('last-updated').textContent = `Updated: ${data.updated}`;
+            }
+        })
+        .catch(error => {
+            document.getElementById('transitions-error').textContent = error.message;
+            document.getElementById('transitions-error').classList.remove('hidden');
+        })
+        .finally(() => {
+            // 恢复按钮状态
+            button.innerHTML = originalText;
+            button.disabled = false;
+            document.getElementById('transitions-loading').classList.add('hidden');
+        });
+});
+
+// 更新状态显示
+function updateStatusDisplay(statusName) {
+    const statusElement = document.getElementById('current-status');
+    const statusColorMap = {
+        'To Do': 'bg-gray-100 text-gray-800',
+        'In Progress': 'bg-blue-100 text-blue-800',
+        'Done': 'bg-green-100 text-green-800',
+        'Review': 'bg-yellow-100 text-yellow-800',
+        'Blocked': 'bg-red-100 text-red-800'
+    };
+    
+    // 移除所有状态类
+    Object.values(statusColorMap).forEach(className => {
+        statusElement.classList.remove(...className.split(' '));
+    });
+    
+    // 添加新状态类
+    const newClass = statusColorMap[statusName] || 'bg-purple-100 text-purple-800';
+    statusElement.classList.add(...newClass.split(' '));
+    
+    // 更新状态文本
+    statusElement.textContent = statusName;
+}
+
+// 更新转换列表
+function updateTransitionsList(transitions) {
+    const container = document.getElementById('transitions-container');
+    
+    if (transitions && transitions.length > 0) {
+        container.innerHTML = '<div class="flex flex-wrap gap-3"></div>';
+        const flexContainer = container.querySelector('div');
+        
+        transitions.forEach(transition => {
+            const button = document.createElement('button');
+            button.onclick = function() { transitionIssue('{{ issue_key }}', transition.id, this); };
+            button.className = 'transition-btn px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-custom flex items-center';
+            button.innerHTML = `<i class="fa fa-exchange mr-2"></i> ${transition.name}`;
+            flexContainer.appendChild(button);
+        });
+    } else {
+        container.innerHTML = '<p class="text-gray-500 italic">No available transitions for this issue.</p>';
+    }
+}
+
+// 自动刷新 - 每30秒刷新一次状态
+setInterval(() => {
+    document.getElementById('refresh-status').click();
+}, 30000);
 </script>
 {% endblock %}
