@@ -122,6 +122,7 @@ def create_issue():
     return render_template('create_issue.html', projects=projects)
 
 
+# 修改issue_detail路由
 @app.route('/issue/<issue_key>')
 def issue_detail(issue_key):
     """显示指定 issue 的详细信息和状态转换选项"""
@@ -130,10 +131,13 @@ def issue_detail(issue_key):
         return redirect(url_for('index'))
     
     try:
-        # 获取issue详情（包含转换信息）
-        issue = jira.issue(issue_key, expand='transitions')
+        # 获取issue详情
+        issue = jira.issue(issue_key)
+        # 使用jira.transitions()获取状态转换（实时获取）
+        transitions = jira.transitions(issue_key)
         return render_template('issue_detail.html', 
                               issue=issue,
+                              transitions=transitions,
                               issue_key=issue_key)
     
     except JIRAError as e:
@@ -144,9 +148,10 @@ def issue_detail(issue_key):
                               error=f"Connection error: {str(e)}")
 
 
+# 修改状态转换接口，添加转换后刷新状态的逻辑
 @app.route('/transition-issue/<issue_key>', methods=['POST'])
 def transition_issue(issue_key):
-    """处理 issue 状态转换"""
+    """处理 issue 状态转换，并返回最新状态和转换选项"""
     jira = get_jira_instance()
     if not jira:
         return jsonify({"status": "error", "message": "Not authenticated"}), 401
@@ -156,14 +161,56 @@ def transition_issue(issue_key):
         return jsonify({"status": "error", "message": "Transition ID required"}), 400
     
     try:
+        # 执行状态转换
         jira.transition_issue(issue_key, transition_id)
-        return jsonify({"status": "success", "message": "Transition successful"})
+        
+        # 转换后实时获取最新状态和可用转换
+        issue = jira.issue(issue_key)
+        new_transitions = jira.transitions(issue_key)
+        
+        # 格式化返回数据
+        transitions_data = [{"id": t.id, "name": t.name} for t in new_transitions]
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Transition successful",
+            "current_status": issue.fields.status.name,
+            "transitions": transitions_data
+        })
     
     except JIRAError as e:
         return jsonify({
             "status": "error", 
             "message": f"Transition failed: {str(e)}"
         }), e.status_code
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# 新增获取最新状态和转换的接口
+@app.route('/get-latest-issue-status/<issue_key>')
+def get_latest_issue_status(issue_key):
+    """实时获取issue最新状态和可用转换"""
+    jira = get_jira_instance()
+    if not jira:
+        return jsonify({"status": "error", "message": "Not authenticated"}), 401
+    
+    try:
+        issue = jira.issue(issue_key)
+        transitions = jira.transitions(issue_key)
+        
+        transitions_data = [{"id": t.id, "name": t.name} for t in transitions]
+        
+        return jsonify({
+            "status": "success",
+            "current_status": issue.fields.status.name,
+            "transitions": transitions_data,
+            "summary": issue.fields.summary,
+            "updated": issue.fields.updated[:16]  # 仅保留日期时间部分
+        })
+    
+    except JIRAError as e:
+        return jsonify({"status": "error", "message": str(e)}), e.status_code
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
