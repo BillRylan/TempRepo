@@ -1,0 +1,64 @@
+/* 基础样式 */
+body {
+    @apply font-inter bg-gray-50 text-dark min-h-screen flex flex-col;
+}
+
+/* 自定义工具类 */
+.content-auto {
+    content-visibility: auto;
+}
+
+.card-shadow {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.transition-custom {
+    transition: all 0.3s ease;
+}
+
+/* 导航栏样式 */
+.nav-link {
+    @apply text-gray-600 hover:text-primary transition-custom;
+}
+
+/* 按钮样式 */
+.btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom;
+}
+
+.btn-secondary {
+    @apply bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-custom;
+}
+
+/* 表单样式 */
+.form-input {
+    @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary;
+}
+
+.form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+/* 状态标签样式 */
+.status-tag {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+/* 卡片样式 */
+.card {
+    @apply bg-white rounded-lg shadow-md overflow-hidden;
+}
+
+.card-body {
+    @apply p-6;
+}
+
+/* 错误提示样式 */
+.alert-error {
+    @apply bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4;
+}
+
+/* 加载状态样式 */
+.loading {
+    @apply inline-block animate-spin rounded-full h-5 w-5 border-2 border-current border-t-transparent;
+}
