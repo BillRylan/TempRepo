@@ -12,8 +12,8 @@
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
     <!-- 创建 Issue 卡片 -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-custom transform hover:-translate-y-1">
-        <div class="p-6">
+    <div class="card hover:shadow-lg transition-custom transform hover:-translate-y-1">
+        <div class="card-body">
             <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <i class="fa fa-plus text-primary text-xl"></i>
             </div>
@@ -27,8 +27,8 @@
     </div>
     
     <!-- 查看 Issue 卡片 -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-custom transform hover:-translate-y-1">
-        <div class="p-6">
+    <div class="card hover:shadow-lg transition-custom transform hover:-translate-y-1">
+        <div class="card-body">
             <div class="w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center mb-4">
                 <i class="fa fa-search text-secondary text-xl"></i>
             </div>
@@ -37,9 +37,8 @@
             <form action="{{ url_for('issue_detail', issue_key='') }}" method="get" class="mt-4">
                 <div class="flex">
                     <input type="text" name="issue_key" placeholder="e.g. PROJ-123" 
-                           class="flex-grow px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-primary focus:border-primary">
-                    <button type="submit" 
-                            class="bg-secondary text-white px-4 py-2 rounded-r-md hover:bg-secondary/90 transition-custom">
+                           class="flex-grow form-input rounded-l-md rounded-r-none">
+                    <button type="submit" class="bg-secondary text-white px-4 py-2 rounded-r-md hover:bg-secondary/90 transition-custom">
                         <i class="fa fa-search"></i>
                     </button>
                 </div>
@@ -48,8 +47,8 @@
     </div>
     
     <!-- 关于卡片 -->
-    <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-custom transform hover:-translate-y-1">
-        <div class="p-6">
+    <div class="card hover:shadow-lg transition-custom transform hover:-translate-y-1">
+        <div class="card-body">
             <div class="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center mb-4">
                 <i class="fa fa-info text-success text-xl"></i>
             </div>
