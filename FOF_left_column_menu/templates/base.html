@@ -4,13 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jira Integration Tool{% block title %}{% endblock %}</title>
-    <!-- 外部资源 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <!-- 自定义样式 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
-    <!-- Tailwind 配置 -->
     <script>
         tailwind.config = {
             theme: {
@@ -35,6 +32,7 @@
 </head>
 <body>
     {% if 'jira_auth' in session %}
+    <!-- 已登录状态：带侧边栏布局 -->
     <div class="main-container">
         <!-- 左侧菜单栏 -->
         <aside class="sidebar">
@@ -67,19 +65,19 @@
             </nav>
         </aside>
         
-        <!-- 主内容区 -->
+        <!-- 已登录状态的内容区域 -->
         <main class="content-area">
             {% block content %}{% endblock %}
         </main>
     </div>
     {% else %}
-    <!-- 未登录状态直接显示内容 -->
+    <!-- 未登录状态：全屏内容区域 -->
     <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {% block content %}{% endblock %}
     </main>
     {% endif %}
 
-    <!-- 页面特定脚本 -->
+    <!-- 页面脚本块（所有页面共用） -->
     {% block scripts %}{% endblock %}
 </body>
 </html>
