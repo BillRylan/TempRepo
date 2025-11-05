@@ -1,82 +1,65 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jira Integration Tool{% block title %}{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#165DFF',
-                        secondary: '#36BFFA',
-                        success: '#00B42A',
-                        warning: '#FF7D00',
-                        danger: '#F53F3F',
-                        dark: '#1D2129',
-                        'gray-light': '#F2F3F5',
-                        'gray-medium': '#C9CDD4'
-                    },
-                    fontFamily: {
-                        inter: ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                }
-            }
-        }
-    </script>
-</head>
-<body>
-    <!-- 已登录状态显示侧边栏，未登录状态隐藏 -->
-    {% if 'jira_auth' in session %}
-    <div class="main-container">
-        <!-- 左侧菜单栏 -->
-        <aside class="sidebar">
-            <div class="flex items-center justify-center md:justify-start w-full px-3 mb-8">
-                <i class="fa fa-bug text-primary text-2xl mr-3 hidden md:block"></i>
-                <span class="font-bold text-xl text-primary hidden md:block">JiraTool</span>
-                <i class="fa fa-bug text-primary text-2xl md:hidden"></i>
+{% extends "base.html" %}
+
+{% block title %} - Login{% endblock %}
+
+{% block guest_content %}
+<div class="max-w-md mx-auto mt-16">
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="p-6">
+            <div class="text-center mb-6">
+                <i class="fa fa-bug text-primary text-4xl mb-3"></i>
+                <h2 class="text-2xl font-bold text-gray-900">Jira Integration Tool</h2>
+                <p class="text-gray-500">Connect to your Jira instance</p>
             </div>
             
-            <nav class="sidebar-menu">
-                <a href="{{ url_for('index') }}" class="sidebar-item {% if request.endpoint == 'index' %}active{% endif %}">
-                    <i class="fa fa-tachometer sidebar-icon"></i>
-                    <span class="sidebar-text">Dashboard</span>
-                </a>
+            {% if error %}
+            <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="mb-4">
+                    <label for="jira_url" class="block text-sm font-medium text-gray-700 mb-1">Jira Base URL</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa fa-globe text-gray-400"></i>
+                        </div>
+                        <input type="url" name="jira_url" id="jira_url" 
+                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                               placeholder="https://your-jira-instance.atlassian.net" required>
+                    </div>
+                </div>
                 
-                <a href="{{ url_for('create_issue') }}" class="sidebar-item {% if request.endpoint == 'create_issue' %}active{% endif %}">
-                    <i class="fa fa-plus-circle sidebar-icon"></i>
-                    <span class="sidebar-text">Create Issue</span>
-                </a>
+                <div class="mb-4">
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa fa-user text-gray-400"></i>
+                        </div>
+                        <input type="text" name="username" id="username" 
+                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                               placeholder="Your Jira username" required>
+                    </div>
+                </div>
                 
-                <a href="{{ url_for('onboarding_apps') }}" class="sidebar-item {% if request.endpoint == 'onboarding_apps' %}active{% endif %}">
-                    <i class="fa fa-cubes sidebar-icon"></i>
-                    <span class="sidebar-text">Onboarding Apps</span>
-                </a>
+                <div class="mb-6">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" name="password" id="password" 
+                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                               placeholder="Your Jira password" required>
+                    </div>
+                </div>
                 
-                <a href="{{ url_for('logout') }}" class="sidebar-item mt-auto">
-                    <i class="fa fa-sign-out sidebar-icon"></i>
-                    <span class="sidebar-text">Logout</span>
-                </a>
-            </nav>
-        </aside>
-        
-        <!-- 已登录状态的内容容器 -->
-        <main class="content-area">
-            {% block content %}{% endblock %}
-        </main>
+                <button type="submit" class="w-full bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 flex justify-center">
+                    <i class="fa fa-sign-in mr-2"></i> Sign in to Jira
+                </button>
+            </form>
+        </div>
     </div>
-    {% else %}
-    <!-- 未登录状态的内容容器（无侧边栏） -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% block content %}{% endblock %}
-    </main>
-    {% endif %}
-
-    {% block scripts %}{% endblock %}
-</body>
-</html>
+</div>
+{% endblock %}
