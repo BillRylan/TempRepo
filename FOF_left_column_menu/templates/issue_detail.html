@@ -2,30 +2,31 @@
 
 {% block title %} - {{ issue_key }}{% endblock %}
 
-{% block content %}
+{% block logged_in_content %}
 <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
     <div>
         <h1 class="text-2xl font-bold text-gray-900">Issue {{ issue_key }}</h1>
         <p class="text-gray-600">Details and status transitions</p>
     </div>
     <div class="mt-3 sm:mt-0 flex gap-3">
-        <button id="refresh-status" class="btn-secondary">
+        <button id="refresh-status" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
             <i class="fa fa-refresh mr-2"></i> Refresh Status
         </button>
-        <a href="{{ url_for('index') }}" class="btn-secondary">
+        <a href="{{ url_for('index') }}" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
             <i class="fa fa-arrow-left mr-2"></i> Back
         </a>
     </div>
 </div>
 
 {% if error %}
-<div class="alert-error">
+<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
     {{ error }}
 </div>
 {% else %}
     {% if issue %}
-    <div class="card mb-6">
-        <div class="card-body">
+    <!-- Issue详情卡片 -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        <div class="p-6">
             <div class="flex flex-wrap justify-between items-start mb-6">
                 <div>
                     <h2 id="issue-summary" class="text-xl font-bold text-gray-900 mb-2">{{ issue.fields.summary }}</h2>
@@ -48,7 +49,7 @@
                         'Blocked': 'bg-red-100 text-red-800'
                     } %}
                     
-                    <span id="current-status" class="status-tag {{ status_color_map.get(issue.fields.status.name, 'bg-purple-100 text-purple-800') }}">
+                    <span id="current-status" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ status_color_map.get(issue.fields.status.name, 'bg-purple-100 text-purple-800') }}">
                         {{ issue.fields.status.name }}
                     </span>
                     <span id="last-updated" class="ml-2 text-xs text-gray-500">
@@ -102,8 +103,8 @@
     </div>
     
     <!-- 状态转换部分 -->
-    <div class="card">
-        <div class="card-body">
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="p-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Available Status Transitions</h3>
             
             <div id="transitions-container">
@@ -111,7 +112,7 @@
                 <div class="flex flex-wrap gap-3">
                     {% for transition in transitions %}
                     <button onclick="transitionIssue({{ transition.id }}, this)"
-                            class="transition-btn px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-custom flex items-center">
+                            class="px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-200 flex items-center">
                         <i class="fa fa-exchange mr-2"></i> {{ transition.name }}
                     </button>
                     {% endfor %}
@@ -134,7 +135,6 @@
 
 {% block scripts %}
 <script>
-    // 注入模板变量到全局
     window.issueKey = "{{ issue_key|escapejs }}";
     window.statusColorMap = {{ status_color_map|json_encode }};
 </script>
