@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %} - Login{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-16">
+    <div class="card">
+        <div class="card-body">
+            <div class="text-center mb-6">
+                <i class="fa fa-bug text-primary text-4xl mb-3"></i>
+                <h2 class="text-2xl font-bold text-gray-900">Jira Integration Tool</h2>
+                <p class="text-gray-500">Connect to your Jira instance</p>
+            </div>
+            
+            {% if error %}
+            <div class="alert-error">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="{{ url_for('login') }}">
+                <div class="mb-4">
+                    <label for="jira_url" class="form-label">Jira Base URL</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa fa-globe text-gray-400"></i>
+                        </div>
+                        <input type="url" name="jira_url" id="jira_url" 
+                               class="form-input pl-10"
+                               placeholder="https://your-jira-instance.atlassian.net" required>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="username" class="form-label">Username</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa fa-user text-gray-400"></i>
+                        </div>
+                        <input type="text" name="username" id="username" 
+                               class="form-input pl-10"
+                               placeholder="Your Jira username" required>
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" name="password" id="password" 
+                               class="form-input pl-10"
+                               placeholder="Your Jira password" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="w-full btn-primary flex justify-center">
+                    <i class="fa fa-sign-in mr-2"></i> Sign in to Jira
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
