@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %} - Create Issue{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Create New Jira Issue</h1>
+    <p class="text-gray-600">Fill in the details below to create a new issue in your Jira project.</p>
+</div>
+
+{% if error %}
+<div class="alert-error">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-4">
+                <label for="project_id" class="form-label">Project <span class="text-danger">*</span></label>
+                <select name="project_id" id="project_id" required
+                        class="form-input">
+                    <option value="">Select a project</option>
+                    {% for project in projects %}
+                    <option value="{{ project.id }}">{{ project.name }} ({{ project.key }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-4">
+                <label for="issue_type" class="form-label">Issue Type <span class="text-danger">*</span></label>
+                <select name="issue_type" id="issue_type" required
+                        class="form-input" disabled>
+                    <option value="">Select a project first</option>
+                </select>
+                <div id="issue_type_loading" class="hidden mt-1 text-sm text-gray-500">
+                    <i class="fa fa-spinner fa-spin"></i> Loading issue types...
+                </div>
+                <div id="issue_type_error" class="hidden mt-1 text-sm text-danger"></div>
+            </div>
+            
+            <div class="mb-4">
+                <label for="summary" class="form-label">Summary <span class="text-danger">*</span></label>
+                <input type="text" name="summary" id="summary" required
+                       class="form-input"
+                       placeholder="Brief summary of the issue">
+            </div>
+            
+            <div class="mb-6">
+                <label for="description" class="form-label">Description</label>
+                <textarea name="description" id="description" rows="4"
+                          class="form-input"
+                          placeholder="Detailed description of the issue"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <a href="{{ url_for('index') }}" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fa fa-plus mr-1"></i> Create Issue
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/create_issue.js') }}"></script>
+{% endblock %}
