@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jira Integration Tool{% block title %}{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
+    <!-- Tailwind配置 -->
     <script>
         tailwind.config = {
             theme: {
@@ -18,9 +17,6 @@
                         success: '#00B42A',
                         warning: '#FF7D00',
                         danger: '#F53F3F',
-                        dark: '#1D2129',
-                        'gray-light': '#F2F3F5',
-                        'gray-medium': '#C9CDD4'
                     },
                     fontFamily: {
                         inter: ['Inter', 'system-ui', 'sans-serif'],
@@ -30,54 +26,59 @@
         }
     </script>
 </head>
-<body>
+<body class="font-inter bg-gray-50 text-gray-900 min-h-screen">
     {% if 'jira_auth' in session %}
-    <!-- 已登录状态：带侧边栏布局 -->
-    <div class="main-container">
+    <!-- 已登录：左侧菜单布局 -->
+    <div class="flex h-screen w-full overflow-hidden">
         <!-- 左侧菜单栏 -->
-        <aside class="sidebar">
-            <div class="flex items-center justify-center md:justify-start w-full px-3 mb-8">
+        <aside class="bg-white w-16 md:w-64 border-r border-gray-200 flex flex-col items-center py-6 shadow-sm transition-all duration-300 z-10">
+            <!-- 品牌标识 -->
+            <div class="flex items-center justify-center md:justify-start w-full px-4 mb-8">
                 <i class="fa fa-bug text-primary text-2xl mr-3 hidden md:block"></i>
                 <span class="font-bold text-xl text-primary hidden md:block">JiraTool</span>
                 <i class="fa fa-bug text-primary text-2xl md:hidden"></i>
             </div>
             
-            <nav class="sidebar-menu">
-                <a href="{{ url_for('index') }}" class="sidebar-item {% if request.endpoint == 'index' %}active{% endif %}">
-                    <i class="fa fa-tachometer sidebar-icon"></i>
-                    <span class="sidebar-text">Dashboard</span>
+            <!-- 菜单列表 -->
+            <nav class="flex flex-col items-center w-full mt-6 space-y-1">
+                <a href="{{ url_for('index') }}" 
+                   class="flex items-center justify-center md:justify-start w-full px-4 py-3 text-gray-600 hover:bg-primary/10 hover:text-primary rounded-lg transition-all duration-200 {% if request.endpoint == 'index' %}bg-primary/10 text-primary font-medium{% endif %}">
+                    <i class="fa fa-tachometer text-xl w-6 h-6"></i>
+                    <span class="hidden md:block ml-3">Dashboard</span>
                 </a>
                 
-                <a href="{{ url_for('create_issue') }}" class="sidebar-item {% if request.endpoint == 'create_issue' %}active{% endif %}">
-                    <i class="fa fa-plus-circle sidebar-icon"></i>
-                    <span class="sidebar-text">Create Issue</span>
+                <a href="{{ url_for('create_issue') }}" 
+                   class="flex items-center justify-center md:justify-start w-full px-4 py-3 text-gray-600 hover:bg-primary/10 hover:text-primary rounded-lg transition-all duration-200 {% if request.endpoint == 'create_issue' %}bg-primary/10 text-primary font-medium{% endif %}">
+                    <i class="fa fa-plus-circle text-xl w-6 h-6"></i>
+                    <span class="hidden md:block ml-3">Create Issue</span>
                 </a>
                 
-                <a href="{{ url_for('onboarding_apps') }}" class="sidebar-item {% if request.endpoint == 'onboarding_apps' %}active{% endif %}">
-                    <i class="fa fa-cubes sidebar-icon"></i>
-                    <span class="sidebar-text">Onboarding Apps</span>
+                <a href="{{ url_for('onboarding_apps') }}" 
+                   class="flex items-center justify-center md:justify-start w-full px-4 py-3 text-gray-600 hover:bg-primary/10 hover:text-primary rounded-lg transition-all duration-200 {% if request.endpoint == 'onboarding_apps' %}bg-primary/10 text-primary font-medium{% endif %}">
+                    <i class="fa fa-cubes text-xl w-6 h-6"></i>
+                    <span class="hidden md:block ml-3">Onboarding Apps</span>
                 </a>
                 
-                <a href="{{ url_for('logout') }}" class="sidebar-item mt-auto">
-                    <i class="fa fa-sign-out sidebar-icon"></i>
-                    <span class="sidebar-text">Logout</span>
+                <a href="{{ url_for('logout') }}" 
+                   class="flex items-center justify-center md:justify-start w-full px-4 py-3 text-gray-600 hover:bg-primary/10 hover:text-primary rounded-lg transition-all duration-200 mt-auto">
+                    <i class="fa fa-sign-out text-xl w-6 h-6"></i>
+                    <span class="hidden md:block ml-3">Logout</span>
                 </a>
             </nav>
         </aside>
         
-        <!-- 已登录状态的内容区域 -->
-        <main class="content-area">
-            {% block content %}{% endblock %}
+        <!-- 主内容区 -->
+        <main class="flex-1 overflow-y-auto p-6 bg-gray-50">
+            {% block logged_in_content %}{% endblock %}
         </main>
     </div>
     {% else %}
-    <!-- 未登录状态：全屏内容区域 -->
-    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {% block content %}{% endblock %}
+    <!-- 未登录：全屏布局 -->
+    <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block guest_content %}{% endblock %}
     </main>
     {% endif %}
 
-    <!-- 页面脚本块（所有页面共用） -->
     {% block scripts %}{% endblock %}
 </body>
 </html>
