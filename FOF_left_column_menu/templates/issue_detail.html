@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %} - {{ issue_key }}{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">Issue {{ issue_key }}</h1>
+        <p class="text-gray-600">Details and status transitions</p>
+    </div>
+    <div class="mt-3 sm:mt-0 flex gap-3">
+        <button id="refresh-status" class="btn-secondary">
+            <i class="fa fa-refresh mr-2"></i> Refresh Status
+        </button>
+        <a href="{{ url_for('index') }}" class="btn-secondary">
+            <i class="fa fa-arrow-left mr-2"></i> Back
+        </a>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert-error">
+    {{ error }}
+</div>
+{% else %}
+    {% if issue %}
+    <div class="card mb-6">
+        <div class="card-body">
+            <div class="flex flex-wrap justify-between items-start mb-6">
+                <div>
+                    <h2 id="issue-summary" class="text-xl font-bold text-gray-900 mb-2">{{ issue.fields.summary }}</h2>
+                    <div class="flex items-center text-sm text-gray-500">
+                        <span class="mr-4">
+                            <i class="fa fa-folder-o mr-1"></i> {{ issue.fields.project.name }}
+                        </span>
+                        <span>
+                            <i class="fa fa-tags mr-1"></i> {{ issue.fields.issuetype.name }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="mt-3 sm:mt-0">
+                    {% set status_color_map = {
+                        'To Do': 'bg-gray-100 text-gray-800',
+                        'In Progress': 'bg-blue-100 text-blue-800',
+                        'Done': 'bg-green-100 text-green-800',
+                        'Review': 'bg-yellow-100 text-yellow-800',
+                        'Blocked': 'bg-red-100 text-red-800'
+                    } %}
+                    
+                    <span id="current-status" class="status-tag {{ status_color_map.get(issue.fields.status.name, 'bg-purple-100 text-purple-800') }}">
+                        {{ issue.fields.status.name }}
+                    </span>
+                    <span id="last-updated" class="ml-2 text-xs text-gray-500">
+                        Updated: {{ issue.fields.updated[:16] }}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Description</h3>
+                <div class="prose max-w-none text-gray-700">
+                    {% if issue.fields.description %}
+                        {{ issue.fields.description|replace('\n', '<br>')|safe }}
+                    {% else %}
+                        <p class="text-gray-500 italic">No description provided.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                    <p class="text-gray-500">Reporter</p>
+                    <p class="font-medium">
+                        {% if issue.fields.reporter.avatarUrls['48x48'] %}
+                        <img src="{{ issue.fields.reporter.avatarUrls['48x48'] }}" alt="{{ issue.fields.reporter.displayName }}" class="inline-block w-5 h-5 rounded-full mr-1">
+                        {% endif %}
+                        {{ issue.fields.reporter.displayName }}
+                    </p>
+                </div>
+                
+                <div>
+                    <p class="text-gray-500">Created</p>
+                    <p class="font-medium">{{ issue.fields.created[:10] }} {{ issue.fields.created[11:16] }}</p>
+                </div>
+                
+                <div>
+                    <p class="text-gray-500">Assignee</p>
+                    <p class="font-medium">
+                        {% if issue.fields.assignee %}
+                            {% if issue.fields.assignee.avatarUrls['48x48'] %}
+                            <img src="{{ issue.fields.assignee.avatarUrls['48x48'] }}" alt="{{ issue.fields.assignee.displayName }}" class="inline-block w-5 h-5 rounded-full mr-1">
+                            {% endif %}
+                            {{ issue.fields.assignee.displayName }}
+                        {% else %}
+                            Unassigned
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 状态转换部分 -->
+    <div class="card">
+        <div class="card-body">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Available Status Transitions</h3>
+            
+            <div id="transitions-container">
+                {% if transitions and transitions|length > 0 %}
+                <div class="flex flex-wrap gap-3">
+                    {% for transition in transitions %}
+                    <button onclick="transitionIssue({{ transition.id }}, this)"
+                            class="transition-btn px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-custom flex items-center">
+                        <i class="fa fa-exchange mr-2"></i> {{ transition.name }}
+                    </button>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500 italic">No available transitions for this issue.</p>
+                {% endif %}
+            </div>
+            
+            <div id="transitions-loading" class="hidden mt-3">
+                <i class="fa fa-spinner fa-spin text-gray-500"></i> Loading transitions...
+            </div>
+            
+            <div id="transitions-error" class="hidden mt-3 text-sm text-red-600"></div>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 注入模板变量到全局
+    window.issueKey = "{{ issue_key|escapejs }}";
+    window.statusColorMap = {{ status_color_map|json_encode }};
+</script>
+<script src="{{ url_for('static', filename='js/issue_detail.js') }}"></script>
+{% endblock %}
