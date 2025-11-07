@@ -1,17 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %} - Onboarding Apps{% endblock %}
+{% block title %} - {{ issue_key }}{% endblock %}
 
 {% block logged_in_content %}
 <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
     <div>
-        <h1 class="text-2xl font-bold text-gray-900">Onboarding Apps</h1>
-        <p class="text-gray-600">Architecture Decision issues with lifecycle and timeline</p>
+        <h1 class="text-2xl font-bold text-gray-900">Issue {{ issue_key }}</h1>
+        <p class="text-gray-600">Details and status transitions</p>
     </div>
-    <div class="mt-3 sm:mt-0">
-        <button id="refresh-issues" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
-            <i class="fa fa-refresh mr-2"></i> Refresh List
+    <div class="mt-3 sm:mt-0 flex gap-3">
+        <button id="refresh-status" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
+            <i class="fa fa-refresh mr-2"></i> Refresh Status
         </button>
+        <a href="{{ url_for('index') }}" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
+            <i class="fa fa-arrow-left mr-2"></i> Back
+        </a>
     </div>
 </div>
 
@@ -19,94 +22,121 @@
 <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
     {{ error }}
 </div>
-{% endif %}
-
-<div class="bg-white rounded-lg shadow-md overflow-hidden">
-    <div class="p-6">
-        {% if issues and issues|length > 0 %}
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead>
-                    <tr>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue Key</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Summary</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reporter</th>
-                        <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {% for issue in issues %}
-                    <tr class="hover:bg-gray-50 cursor-pointer issue-row" data-timeline="timeline-{{ loop.index }}">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ issue.key }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ issue.summary }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ issue.project }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            {% set status_color_map = {
-                                'To Do': 'bg-gray-100 text-gray-800',
-                                'In Progress': 'bg-blue-100 text-blue-800',
-                                'Done': 'bg-green-100 text-green-800',
-                                'Review': 'bg-yellow-100 text-yellow-800',
-                                'Blocked': 'bg-red-100 text-red-800'
-                            } %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ status_color_map.get(issue.status, 'bg-purple-100 text-purple-800') }}">
-                                {{ issue.status }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ issue.created[:10] }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ issue.reporter }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <i class="fa fa-chevron-down toggle-icon"></i>
-                            <a href="{{ url_for('issue_detail', issue_key=issue.key) }}" class="ml-3 text-primary hover:text-primary/80">
-                                <i class="fa fa-eye"></i>
-                            </a>
-                        </td>
-                    </tr>
+{% else %}
+    {% if issue %}
+    <!-- Issue详情卡片 -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        <div class="p-6">
+            <div class="flex flex-wrap justify-between items-start mb-6">
+                <div>
+                    <h2 id="issue-summary" class="text-xl font-bold text-gray-900 mb-2">{{ issue.fields.summary }}</h2>
+                    <div class="flex items-center text-sm text-gray-500">
+                        <span class="mr-4">
+                            <i class="fa fa-folder-o mr-1"></i> {{ issue.fields.project.name }}
+                        </span>
+                        <span>
+                            <i class="fa fa-tags mr-1"></i> {{ issue.fields.issuetype.name }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="mt-3 sm:mt-0">
+                    {% set status_color_map = {
+                        'To Do': 'bg-gray-100 text-gray-800',
+                        'In Progress': 'bg-blue-100 text-blue-800',
+                        'Done': 'bg-green-100 text-green-800',
+                        'Review': 'bg-yellow-100 text-yellow-800',
+                        'Blocked': 'bg-red-100 text-red-800'
+                    } %}
                     
-                    <!-- 时间线（默认隐藏） -->
-                    <tr class="hidden" id="timeline-{{ loop.index }}">
-                        <td colspan="7" class="px-6 py-4">
-                            <h4 class="font-medium mb-3">Status Timeline for {{ issue.key }}</h4>
-                            {% if issue.status_history and issue.status_history|length > 0 %}
-                            <div class="relative pl-6 border-l border-gray-200 ml-3 space-y-4">
-                                {% for event in issue.status_history %}
-                                <div class="relative">
-                                    <div class="absolute -left-9 w-4 h-4 rounded-full bg-primary border-2 border-white"></div>
-                                    <div class="bg-gray-50 p-3 rounded-md shadow-sm">
-                                        <p class="font-medium">
-                                            {{ event.from_status }} → {{ event.to_status }}
-                                        </p>
-                                        <p class="text-sm text-gray-600">
-                                            By {{ event.author }} on {{ event.created[:16] }}
-                                        </p>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {% else %}
-                            <p class="text-gray-500 italic">No status history available for this issue.</p>
+                    <span id="current-status" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ status_color_map.get(issue.fields.status.name, 'bg-purple-100 text-purple-800') }}">
+                        {{ issue.fields.status.name }}
+                    </span>
+                    <span id="last-updated" class="ml-2 text-xs text-gray-500">
+                        Updated: {{ issue.fields.updated[:16] }}
+                    </span>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Description</h3>
+                <div class="prose max-w-none text-gray-700">
+                    {% if issue.fields.description %}
+                        {{ issue.fields.description|replace('\n', '<br>')|safe }}
+                    {% else %}
+                        <p class="text-gray-500 italic">No description provided.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                    <p class="text-gray-500">Reporter</p>
+                    <p class="font-medium">
+                        {% if issue.fields.reporter.avatarUrls['48x48'] %}
+                        <img src="{{ issue.fields.reporter.avatarUrls['48x48'] }}" alt="{{ issue.fields.reporter.displayName }}" class="inline-block w-5 h-5 rounded-full mr-1">
+                        {% endif %}
+                        {{ issue.fields.reporter.displayName }}
+                    </p>
+                </div>
+                
+                <div>
+                    <p class="text-gray-500">Created</p>
+                    <p class="font-medium">{{ issue.fields.created[:10] }} {{ issue.fields.created[11:16] }}</p>
+                </div>
+                
+                <div>
+                    <p class="text-gray-500">Assignee</p>
+                    <p class="font-medium">
+                        {% if issue.fields.assignee %}
+                            {% if issue.fields.assignee.avatarUrls['48x48'] %}
+                            <img src="{{ issue.fields.assignee.avatarUrls['48x48'] }}" alt="{{ issue.fields.assignee.displayName }}" class="inline-block w-5 h-5 rounded-full mr-1">
                             {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            {{ issue.fields.assignee.displayName }}
+                        {% else %}
+                            Unassigned
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
         </div>
-        {% else %}
-        <div class="text-center py-8">
-            <i class="fa fa-folder-open text-gray-300 text-5xl mb-4"></i>
-            <p class="text-gray-500">No Architecture Decision issues found</p>
-            <a href="{{ url_for('create_issue') }}" class="inline-block mt-4 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200">
-                <i class="fa fa-plus mr-1"></i> Create New Architecture Decision
-            </a>
-        </div>
-        {% endif %}
     </div>
-</div>
+    
+    <!-- 状态转换部分 -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Available Status Transitions</h3>
+            
+            <div id="transitions-container">
+                {% if transitions and transitions|length > 0 %}
+                <div class="flex flex-wrap gap-3">
+                    {% for transition in transitions %}
+                    <button onclick="transitionIssue({{ transition.id }}, this)"
+                            class="px-4 py-2 border border-primary text-primary bg-primary/5 rounded-md hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-200 flex items-center">
+                        <i class="fa fa-exchange mr-2"></i> {{ transition.name }}
+                    </button>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500 italic">No available transitions for this issue.</p>
+                {% endif %}
+            </div>
+            
+            <div id="transitions-loading" class="hidden mt-3">
+                <i class="fa fa-spinner fa-spin text-gray-500"></i> Loading transitions...
+            </div>
+            
+            <div id="transitions-error" class="hidden mt-3 text-sm text-red-600"></div>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/onboarding_apps.js') }}"></script>
+<script>
+    window.issueKey = "{{ issue_key|escapejs }}";
+    window.statusColorMap = {{ status_color_map|json_encode }};
+</script>
+<script src="{{ url_for('static', filename='js/issue_detail.js') }}"></script>
 {% endblock %}
