@@ -1,11 +1,22 @@
 from flask import Flask, request
 from flask_restx import Api, Resource, fields
+from flask_httpauth import HTTPTokenAuth
 from jira import JIRA, exceptions
 from config import Config
 
 # Initialize Flask application
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Initialize Authentication (User + Token)
+auth = HTTPTokenAuth(scheme='Basic')
+
+@auth.verify_token
+def verify_token(username, token):
+    api_users = app.config['API_USERS']
+    if username in api_users and api_users[username] == token:
+        return username
+    return None
 
 # Initialize Jira connection
 try:
@@ -15,19 +26,27 @@ try:
     )
 except exceptions.JIRAError as e:
     app.logger.error(f"Failed to connect to Jira: {str(e)}")
-    jira = None  # API will return connection error
+    jira = None
 
 # Initialize Swagger documentation
 api = Api(
     app,
-    version='1.1',
+    version='1.2',
     title='Jira API Proxy Service',
-    description='Expose core Jira functionalities via Flask REST API',
-    doc='/docs/'  # Documentation endpoint
+    description='Expose core Jira functionalities with User+Token authentication',
+    doc='/docs/',
+    security='basicAuth'
 )
 
+# Swagger security definition
+api.security_definitions = {
+    'basicAuth': {
+        'type': 'basic',
+        'description': 'User and Token authentication (format: username:token)'
+    }
+}
+
 # -------------------------- API Models --------------------------
-# Model for creating a main issue
 issue_model = api.model('Issue', {
     'project': fields.String(required=True, description='Project key (e.g., PROJ)'),
     'issuetype': fields.String(required=True, description='Issue type (e.g., Task, Bug)'),
@@ -36,12 +55,10 @@ issue_model = api.model('Issue', {
     'priority': fields.String(description='Priority (e.g., High, Medium, Low)')
 })
 
-# Model for status transitions
 transition_model = api.model('Transition', {
     'transition': fields.String(required=True, description='Transition name (e.g., "In Progress")')
 })
 
-# Model for creating subtasks
 subtask_model = api.model('SubTask', {
     'summary': fields.String(required=True, description='Subtask title'),
     'description': fields.String(description='Subtask details'),
@@ -54,7 +71,7 @@ ns_project = api.namespace('projects', description='Project management endpoints
 ns_user = api.namespace('users', description='User management endpoints')
 
 
-# Decorator for handling Jira errors
+# Error handling decorator
 def handle_jira_errors(func):
     def wrapper(*args, **kwargs):
         if not jira:
@@ -70,7 +87,9 @@ def handle_jira_errors(func):
 
 # -------------------------- Issue Endpoints --------------------------
 @ns_issue.route('')
+@api.doc(security='basicAuth')
 class IssueList(Resource):
+    @auth.login_required
     @handle_jira_errors
     @api.doc(params={
         'jql': 'JQL query (e.g., "project=PROJ AND status=Open")',
@@ -98,6 +117,7 @@ class IssueList(Resource):
             'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None
         } for issue in issues]
 
+    @auth.login_required
     @handle_jira_errors
     @api.expect(issue_model)
     def post(self):
@@ -118,8 +138,9 @@ class IssueList(Resource):
 
 
 @ns_issue.route('/<string:issue_key>')
-@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'}, security='basicAuth')
 class IssueDetail(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self, issue_key):
         """Get detailed information about an issue"""
@@ -137,6 +158,7 @@ class IssueDetail(Resource):
             'url': issue.permalink()
         }
 
+    @auth.login_required
     @handle_jira_errors
     @api.expect(transition_model)
     def patch(self, issue_key):
@@ -152,8 +174,9 @@ class IssueDetail(Resource):
 
 
 @ns_issue.route('/<string:issue_key>/status')
-@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'}, security='basicAuth')
 class IssueStatus(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self, issue_key):
         """Get current status of an issue"""
@@ -167,8 +190,9 @@ class IssueStatus(Resource):
 
 
 @ns_issue.route('/<string:issue_key>/transitions')
-@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'}, security='basicAuth')
 class IssueTransitions(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self, issue_key):
         """Get available status transitions for an issue"""
@@ -181,8 +205,9 @@ class IssueTransitions(Resource):
 
 
 @ns_issue.route('/<string:issue_key>/subtasks')
-@api.doc(params={'issue_key': 'Parent issue key (e.g., PROJ-123)'})
+@api.doc(params={'issue_key': 'Parent issue key (e.g., PROJ-123)'}, security='basicAuth')
 class IssueSubtasks(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self, issue_key):
         """Get all subtasks of a parent issue"""
@@ -195,6 +220,7 @@ class IssueSubtasks(Resource):
             'created': subtask.fields.created
         } for subtask in issue.fields.subtasks]
 
+    @auth.login_required
     @handle_jira_errors
     @api.expect(subtask_model)
     def post(self, issue_key):
@@ -205,7 +231,7 @@ class IssueSubtasks(Resource):
 
         subtask = jira.create_issue(
             project=project_key,
-            issuetype={'name': 'Sub-task'},  # Must match Jira's subtask type name
+            issuetype={'name': 'Sub-task'},
             summary=data['summary'],
             description=data.get('description', ''),
             priority={'name': data.get('priority', 'Medium')},
@@ -223,8 +249,9 @@ class IssueSubtasks(Resource):
 
 
 @ns_issue.route('/<string:issue_key>/changelog')
-@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'}, security='basicAuth')
 class IssueChangelog(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self, issue_key):
         """Get change history of an issue"""
@@ -245,7 +272,9 @@ class IssueChangelog(Resource):
 
 # -------------------------- Project Endpoints --------------------------
 @ns_project.route('')
+@api.doc(security='basicAuth')
 class ProjectList(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self):
         """Get list of all projects"""
@@ -259,8 +288,9 @@ class ProjectList(Resource):
 
 
 @ns_project.route('/<string:project_key>')
-@api.doc(params={'project_key': 'Project key (e.g., PROJ)'})
+@api.doc(params={'project_key': 'Project key (e.g., PROJ)'}, security='basicAuth')
 class ProjectDetail(Resource):
+    @auth.login_required
     @handle_jira_errors
     def get(self, project_key):
         """Get detailed information about a project"""
@@ -278,9 +308,10 @@ class ProjectDetail(Resource):
 
 # -------------------------- User Endpoints --------------------------
 @ns_user.route('')
+@api.doc(params={'query': 'Search query (username or email)'}, security='basicAuth')
 class UserSearch(Resource):
+    @auth.login_required
     @handle_jira_errors
-    @api.doc(params={'query': 'Search query (username or email)'})
     def get(self):
         """Search users by username or email"""
         query = request.args.get('query', '')
