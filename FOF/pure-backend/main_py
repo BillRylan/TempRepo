@@ -1,0 +1,297 @@
+from flask import Flask, request
+from flask_restx import Api, Resource, fields
+from jira import JIRA, exceptions
+from config import Config
+
+# Initialize Flask application
+app = Flask(__name__)
+app.config.from_object(Config)
+
+# Initialize Jira connection
+try:
+    jira = JIRA(
+        server=Config.JIRA_SERVER,
+        basic_auth=(Config.JIRA_USER, Config.JIRA_TOKEN)
+    )
+except exceptions.JIRAError as e:
+    app.logger.error(f"Failed to connect to Jira: {str(e)}")
+    jira = None  # API will return connection error
+
+# Initialize Swagger documentation
+api = Api(
+    app,
+    version='1.1',
+    title='Jira API Proxy Service',
+    description='Expose core Jira functionalities via Flask REST API',
+    doc='/docs/'  # Documentation endpoint
+)
+
+# -------------------------- API Models --------------------------
+# Model for creating a main issue
+issue_model = api.model('Issue', {
+    'project': fields.String(required=True, description='Project key (e.g., PROJ)'),
+    'issuetype': fields.String(required=True, description='Issue type (e.g., Task, Bug)'),
+    'summary': fields.String(required=True, description='Issue title'),
+    'description': fields.String(description='Issue details'),
+    'priority': fields.String(description='Priority (e.g., High, Medium, Low)')
+})
+
+# Model for status transitions
+transition_model = api.model('Transition', {
+    'transition': fields.String(required=True, description='Transition name (e.g., "In Progress")')
+})
+
+# Model for creating subtasks
+subtask_model = api.model('SubTask', {
+    'summary': fields.String(required=True, description='Subtask title'),
+    'description': fields.String(description='Subtask details'),
+    'priority': fields.String(description='Priority (default: Medium)')
+})
+
+# -------------------------- Namespaces --------------------------
+ns_issue = api.namespace('issues', description='Issue management endpoints')
+ns_project = api.namespace('projects', description='Project management endpoints')
+ns_user = api.namespace('users', description='User management endpoints')
+
+
+# Decorator for handling Jira errors
+def handle_jira_errors(func):
+    def wrapper(*args, **kwargs):
+        if not jira:
+            return {'error': 'Failed to connect to Jira service'}, 500
+        try:
+            return func(*args, **kwargs)
+        except exceptions.JIRAError as e:
+            return {'error': str(e)}, e.status_code
+        except Exception as e:
+            return {'error': f'Server error: {str(e)}'}, 500
+    return wrapper
+
+
+# -------------------------- Issue Endpoints --------------------------
+@ns_issue.route('')
+class IssueList(Resource):
+    @handle_jira_errors
+    @api.doc(params={
+        'jql': 'JQL query (e.g., "project=PROJ AND status=Open")',
+        'maxResults': 'Maximum number of results (default: 10)',
+        'startAt': 'Pagination offset (default: 0)'
+    })
+    def get(self):
+        """Search issues using JQL"""
+        jql = request.args.get('jql', 'project is not empty')
+        max_results = int(request.args.get('maxResults', 10))
+        start_at = int(request.args.get('startAt', 0))
+        
+        issues = jira.search_issues(
+            jql,
+            maxResults=max_results,
+            startAt=start_at,
+            fields='id,key,summary,status,assignee'
+        )
+        
+        return [{
+            'id': issue.id,
+            'key': issue.key,
+            'summary': issue.fields.summary,
+            'status': issue.fields.status.name,
+            'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None
+        } for issue in issues]
+
+    @handle_jira_errors
+    @api.expect(issue_model)
+    def post(self):
+        """Create a new issue"""
+        data = api.payload
+        issue = jira.create_issue(
+            project=data['project'],
+            issuetype={'name': data['issuetype']},
+            summary=data['summary'],
+            description=data.get('description', ''),
+            priority={'name': data.get('priority', 'Medium')}
+        )
+        return {
+            'id': issue.id,
+            'key': issue.key,
+            'url': issue.permalink()
+        }, 201
+
+
+@ns_issue.route('/<string:issue_key>')
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+class IssueDetail(Resource):
+    @handle_jira_errors
+    def get(self, issue_key):
+        """Get detailed information about an issue"""
+        issue = jira.issue(issue_key)
+        return {
+            'id': issue.id,
+            'key': issue.key,
+            'summary': issue.fields.summary,
+            'description': issue.fields.description,
+            'status': issue.fields.status.name,
+            'priority': issue.fields.priority.name,
+            'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None,
+            'created': issue.fields.created,
+            'updated': issue.fields.updated,
+            'url': issue.permalink()
+        }
+
+    @handle_jira_errors
+    @api.expect(transition_model)
+    def patch(self, issue_key):
+        """Update issue status via transition"""
+        data = api.payload
+        jira.transition_issue(issue_key, data['transition'])
+        new_status = jira.issue(issue_key, fields='status').fields.status.name
+        return {
+            'message': f'Issue {issue_key} status updated',
+            'transition_executed': data['transition'],
+            'current_status': new_status
+        }
+
+
+@ns_issue.route('/<string:issue_key>/status')
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+class IssueStatus(Resource):
+    @handle_jira_errors
+    def get(self, issue_key):
+        """Get current status of an issue"""
+        issue = jira.issue(issue_key, fields='status,updated')
+        return {
+            'issue_key': issue_key,
+            'current_status': issue.fields.status.name,
+            'status_id': issue.fields.status.id,
+            'last_updated': issue.fields.updated
+        }
+
+
+@ns_issue.route('/<string:issue_key>/transitions')
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+class IssueTransitions(Resource):
+    @handle_jira_errors
+    def get(self, issue_key):
+        """Get available status transitions for an issue"""
+        transitions = jira.transitions(issue_key)
+        return [{
+            'id': t['id'],
+            'name': t['name'],
+            'target_status': t['to']['name']
+        } for t in transitions]
+
+
+@ns_issue.route('/<string:issue_key>/subtasks')
+@api.doc(params={'issue_key': 'Parent issue key (e.g., PROJ-123)'})
+class IssueSubtasks(Resource):
+    @handle_jira_errors
+    def get(self, issue_key):
+        """Get all subtasks of a parent issue"""
+        issue = jira.issue(issue_key, fields='subtasks')
+        return [{
+            'id': subtask.id,
+            'key': subtask.key,
+            'summary': subtask.fields.summary,
+            'status': subtask.fields.status.name,
+            'created': subtask.fields.created
+        } for subtask in issue.fields.subtasks]
+
+    @handle_jira_errors
+    @api.expect(subtask_model)
+    def post(self, issue_key):
+        """Create a subtask linked to a parent issue"""
+        data = api.payload
+        main_issue = jira.issue(issue_key, fields='project')
+        project_key = main_issue.fields.project.key
+
+        subtask = jira.create_issue(
+            project=project_key,
+            issuetype={'name': 'Sub-task'},  # Must match Jira's subtask type name
+            summary=data['summary'],
+            description=data.get('description', ''),
+            priority={'name': data.get('priority', 'Medium')},
+            parent={'key': issue_key}
+        )
+
+        return {
+            'subtask_key': subtask.key,
+            'subtask_id': subtask.id,
+            'parent_key': issue_key,
+            'summary': subtask.fields.summary,
+            'status': subtask.fields.status.name,
+            'url': subtask.permalink()
+        }, 201
+
+
+@ns_issue.route('/<string:issue_key>/changelog')
+@api.doc(params={'issue_key': 'Issue key (e.g., PROJ-123)'})
+class IssueChangelog(Resource):
+    @handle_jira_errors
+    def get(self, issue_key):
+        """Get change history of an issue"""
+        issue = jira.issue(issue_key)
+        changelog = []
+        for history in issue.changelog.histories:
+            changelog.append({
+                'author': history.author.displayName,
+                'timestamp': history.created,
+                'changes': [{
+                    'field': item.field,
+                    'from_value': item.fromString,
+                    'to_value': item.toString
+                } for item in history.items]
+            })
+        return changelog
+
+
+# -------------------------- Project Endpoints --------------------------
+@ns_project.route('')
+class ProjectList(Resource):
+    @handle_jira_errors
+    def get(self):
+        """Get list of all projects"""
+        projects = jira.projects()
+        return [{
+            'id': p.id,
+            'key': p.key,
+            'name': p.name,
+            'description': p.description
+        } for p in projects]
+
+
+@ns_project.route('/<string:project_key>')
+@api.doc(params={'project_key': 'Project key (e.g., PROJ)'})
+class ProjectDetail(Resource):
+    @handle_jira_errors
+    def get(self, project_key):
+        """Get detailed information about a project"""
+        project = jira.project(project_key)
+        return {
+            'id': project.id,
+            'key': project.key,
+            'name': project.name,
+            'description': project.description,
+            'lead': project.lead.displayName if project.lead else None,
+            'components': [c.name for c in jira.project_components(project_key)],
+            'versions': [v.name for v in jira.project_versions(project_key)]
+        }
+
+
+# -------------------------- User Endpoints --------------------------
+@ns_user.route('')
+class UserSearch(Resource):
+    @handle_jira_errors
+    @api.doc(params={'query': 'Search query (username or email)'})
+    def get(self):
+        """Search users by username or email"""
+        query = request.args.get('query', '')
+        users = jira.search_users(query)
+        return [{
+            'username': u.name,
+            'display_name': u.displayName,
+            'email': u.emailAddress,
+            'active': u.active
+        } for u in users]
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=Config.PORT)
