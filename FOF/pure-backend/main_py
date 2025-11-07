@@ -5,11 +5,8 @@ from flask_restx import Api, Resource, fields
 from jira import JIRA, exceptions
 from config import Config
 
-# Initialize Flask application
 app = Flask(__name__)
 app.config.from_object(Config)
-
-# Disable SSL warnings
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
 # Initialize Jira connection
@@ -17,18 +14,18 @@ try:
     jira = JIRA(
         server=Config.JIRA_SERVER,
         basic_auth=(Config.JIRA_EMAIL, Config.JIRA_API_TOKEN),
-        verify_ssl=False  # Disable SSL verification (not recommended for production)
+        verify_ssl=False
     )
 except exceptions.JIRAError as e:
     app.logger.error(f"Jira connection failed: {str(e)}")
     jira = None
 
-# Initialize Swagger documentation
+# Initialize Swagger
 api = Api(
     app,
-    version='1.5',
-    title='Jira API Proxy Service',
-    description='Complete Jira API proxy with issue, project, and user management',
+    version='1.7',
+    title='Jira API Proxy',
+    description='Complete Jira API with full parameter documentation (all POST params in Swagger)',
     doc='/docs/'
 )
 
@@ -37,20 +34,32 @@ issue_model = api.model('Issue', {
     'project': fields.String(required=True, description='Project key (e.g., "PROJ")'),
     'issuetype': fields.String(required=True, description='Issue type (e.g., "Task", "Bug")'),
     'summary': fields.String(required=True, description='Issue title (max 255 chars)'),
-    'description': fields.String(description='Detailed description (supports markdown)'),
-    'priority': fields.String(description='Priority (e.g., "High", "Medium"; default: "Medium")'),
-    'custom_fields': fields.Raw(description='Optional custom fields ({"customfield_10000": "value"})')
+    'description': fields.String(description='Detailed description (markdown supported)'),
+    'priority': fields.String(description='Priority (e.g., "High", "Medium")'),
+    'assignee': fields.String(description='Assignee username (e.g., "john.doe")'),
+    'reporter': fields.String(description='Reporter username (default: current user)'),
+    'labels': fields.List(fields.String, description='Labels (e.g., ["frontend", "bug"])'),
+    'components': fields.List(fields.String, description='Components (e.g., ["UI", "Backend"])'),
+    'versions': fields.List(fields.String, description='Fix versions (e.g., ["v1.0"])'),
+    'due_date': fields.String(description='Due date (ISO format: "2024-12-31")'),
+    'custom_fields': fields.Raw(description='Custom fields ({"customfield_10000": "value"})')
 })
 
 transition_model = api.model('Transition', {
     'transition': fields.String(required=True, description='Transition name (e.g., "In Progress")'),
-    'comment': fields.String(description='Optional transition comment')
+    'comment': fields.String(description='Transition comment (markdown supported)'),
+    'assignee': fields.String(description='Update assignee (username or "none")'),
+    'resolution': fields.String(description='Resolution (e.g., "Fixed" for Done transitions)'),
+    'custom_fields': fields.Raw(description='Update custom fields during transition')
 })
 
 subtask_model = api.model('SubTask', {
     'summary': fields.String(required=True, description='Subtask title'),
     'description': fields.String(description='Subtask details'),
-    'priority': fields.String(description='Priority (default: "Medium")')
+    'priority': fields.String(description='Priority (e.g., "Medium")'),
+    'assignee': fields.String(description='Assignee username'),
+    'labels': fields.List(fields.String, description='Labels (e.g., ["subtask"])'),
+    'due_date': fields.String(description='Due date (ISO format: "2024-11-30")')
 })
 
 # -------------------------- Namespaces --------------------------
@@ -81,15 +90,15 @@ class IssueList(Resource):
     @api.doc(
         description='Search issues using JQL with pagination and custom fields',
         params={
-            'jql': 'JQL query (e.g., "project=PROJ AND status=\'Open\'"; default: "project is not empty")',
-            'maxResults': 'Max results (default: 20; max: 1000)',
-            'startAt': 'Pagination offset (default: 0)',
-            'fields': 'Fields to return (e.g., "summary,status"; default: "id,key,summary,status,assignee")'
+            'jql': 'JQL query to filter issues (e.g., "project=PROJ AND status=\'Open\'"; default: "project is not empty")',
+            'maxResults': 'Maximum number of results to return (default: 20; max: 1000)',
+            'startAt': 'Pagination offset for fetching subsequent pages (default: 0)',
+            'fields': 'Comma-separated fields to include in response (e.g., "summary,status,assignee"; default: "id,key,summary,status,assignee")'
         },
         responses={
-            200: 'Success',
-            400: 'Invalid JQL',
-            500: 'Connection error'
+            200: 'Successfully retrieved issues',
+            400: 'Invalid JQL query format',
+            500: 'Server or Jira connection error'
         }
     )
     def get(self):
@@ -132,11 +141,25 @@ class IssueList(Resource):
 
     @handle_jira_errors
     @api.doc(
-        description='Create a new issue with specified fields',
+        description='Create a new issue with complete parameters',
+        params={
+            'project': 'Required. Project key (e.g., "PROJ")',
+            'issuetype': 'Required. Issue type (e.g., "Task", "Bug", "Epic")',
+            'summary': 'Required. Issue title (max 255 characters)',
+            'description': 'Optional. Detailed description (markdown supported)',
+            'priority': 'Optional. Priority level (e.g., "Highest", "High", "Medium"; default: "Medium")',
+            'assignee': 'Optional. Assignee username or account ID (e.g., "john.doe")',
+            'reporter': 'Optional. Reporter username (default: current Jira user)',
+            'labels': 'Optional. List of labels (e.g., ["frontend", "bugfix"])',
+            'components': 'Optional. List of component names (e.g., ["UI", "Backend"])',
+            'versions': 'Optional. List of fix version names (e.g., ["v1.0", "v2.1"])',
+            'due_date': 'Optional. Due date in ISO 8601 format (e.g., "2024-12-31")',
+            'custom_fields': 'Optional. Custom fields in JSON format ({"customfield_10000": "value"})'
+        },
         responses={
-            201: 'Issue created',
-            400: 'Missing required fields',
-            500: 'Connection error'
+            201: 'Issue created successfully',
+            400: 'Missing required fields or invalid parameter value',
+            500: 'Server or Jira connection error'
         }
     )
     @api.expect(issue_model)
@@ -148,18 +171,32 @@ class IssueList(Resource):
             'issuetype': {'name': data['issuetype']},
             'summary': data['summary'],
             'description': data.get('description', ''),
-            'priority': {'name': data.get('priority', 'Medium')}
         }
-        
+
+        if 'priority' in data:
+            issue_fields['priority'] = {'name': data['priority']}
+        if 'assignee' in data:
+            issue_fields['assignee'] = {'name': data['assignee']}
+        if 'reporter' in data:
+            issue_fields['reporter'] = {'name': data['reporter']}
+        if 'labels' in data:
+            issue_fields['labels'] = data['labels']
+        if 'components' in data:
+            issue_fields['components'] = [{'name': c} for c in data['components']]
+        if 'versions' in data:
+            issue_fields['versions'] = [{'name': v} for v in data['versions']]
+        if 'due_date' in data:
+            issue_fields['duedate'] = data['due_date']
         if 'custom_fields' in data:
             issue_fields.update(data['custom_fields'])
-            
+
         issue = jira.create_issue(fields=issue_fields)
         return {
             'id': issue.id,
             'key': issue.key,
             'summary': issue.fields.summary,
             'status': issue.fields.status.name,
+            'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None,
             'created_at': issue.fields.created,
             'url': issue.permalink()
         }, 201
@@ -167,13 +204,18 @@ class IssueList(Resource):
 
 @ns_issue.route('/<string:issue_key>')
 @api.doc(
-    description='Get or update a specific issue',
-    params={'issue_key': 'Issue key (e.g., "PROJ-123")'},
-    responses={404: 'Issue not found'}
+    description='Get detailed information about a specific issue',
+    params={
+        'issue_key': 'Unique issue identifier (e.g., "PROJ-123"; format: [A-Z]+-\d+)'
+    },
+    responses={
+        200: 'Successfully retrieved issue details',
+        404: 'Issue not found with the provided key',
+        500: 'Server or Jira connection error'
+    }
 )
 class IssueDetail(Resource):
     @handle_jira_errors
-    @api.doc(description='Get detailed information about an issue')
     def get(self, issue_key):
         """Get issue details"""
         issue = jira.issue(issue_key)
@@ -196,9 +238,15 @@ class IssueDetail(Resource):
 
 @ns_issue.route('/<string:issue_key>/status')
 @api.doc(
-    description='Get current status of an issue',
-    params={'issue_key': 'Issue key (e.g., "PROJ-123")'},
-    responses={404: 'Issue not found'}
+    description='Get current status of a specific issue (lightweight endpoint)',
+    params={
+        'issue_key': 'Unique issue identifier (e.g., "PROJ-123")'
+    },
+    responses={
+        200: 'Successfully retrieved status',
+        404: 'Issue not found',
+        500: 'Connection error'
+    }
 )
 class IssueStatus(Resource):
     @handle_jira_errors
@@ -216,12 +264,24 @@ class IssueStatus(Resource):
 @ns_issue.route('/<string:issue_key>/transitions')
 @api.doc(
     description='Manage status transitions for an issue',
-    params={'issue_key': 'Issue key (e.g., "PROJ-123")'},
-    responses={404: 'Issue not found'}
+    params={
+        'issue_key': 'Unique issue identifier (e.g., "PROJ-123")',
+        'transition': 'Required. Transition name (e.g., "In Progress", "Done", "Resolve Issue")',
+        'comment': 'Optional. Comment for the transition (markdown supported)',
+        'assignee': 'Optional. Update assignee during transition (username, account ID, or "none")',
+        'resolution': 'Optional. Resolution name for completion transitions (e.g., "Fixed", "Won\'t Fix")',
+        'custom_fields': 'Optional. Update custom fields during transition (JSON format)'
+    },
+    responses={
+        404: 'Issue not found'
+    }
 )
 class IssueTransitions(Resource):
     @handle_jira_errors
-    @api.doc(description='Get all available status transitions')
+    @api.doc(
+        description='Get all available status transitions for the issue',
+        responses={200: 'Successfully retrieved transitions'}
+    )
     def get(self, issue_key):
         """Get available transitions"""
         transitions = jira.transitions(issue_key)
@@ -234,180 +294,67 @@ class IssueTransitions(Resource):
 
     @handle_jira_errors
     @api.doc(
-        description='Execute a status transition',
-        responses={400: 'Invalid transition name'}
+        description='Execute a status transition to change the issue\'s state',
+        responses={
+            200: 'Transition executed successfully',
+            400: 'Invalid transition name or parameters'
+        }
     )
     @api.expect(transition_model)
     def post(self, issue_key):
         """Execute a transition"""
         data = api.payload
         transition_name = data['transition']
-        comment = data.get('comment', '')
-        
+        transition_args = {}
+
+        if 'comment' in data:
+            transition_args['comment'] = data['comment']
+        if 'assignee' in data:
+            transition_args['assignee'] = {'name': data['assignee']}
+        if 'resolution' in data:
+            transition_args['resolution'] = {'name': data['resolution']}
+        if 'custom_fields' in data:
+            transition_args.update(data['custom_fields'])
+
         transitions = jira.transitions(issue_key)
         transition = next(
             (t for t in transitions if t['name'].lower() == transition_name.lower()),
             None
         )
-        
         if not transition:
             return {'error': f'Transition "{transition_name}" not found'}, 400
-        
-        transition_args = {'transition': transition['id']}
-        if comment:
-            transition_args['comment'] = comment
-        
-        jira.transition_issue(issue_key, **transition_args)
-        updated_issue = jira.issue(issue_key, fields='status,updated')
-        
+
+        jira.transition_issue(issue_key, transition['id'],** transition_args)
+        updated_issue = jira.issue(issue_key, fields='status,assignee,updated')
+
         return {
             'issue_key': issue_key,
             'transition_executed': transition_name,
             'current_status': updated_issue.fields.status.name,
+            'current_assignee': updated_issue.fields.assignee.displayName if updated_issue.fields.assignee else None,
             'updated_at': updated_issue.fields.updated,
-            'comment': comment
+            'comment': data.get('comment')
         }
 
 
 @ns_issue.route('/<string:issue_key>/subtasks')
 @api.doc(
-    description='Manage subtasks of a parent issue',
-    params={'issue_key': 'Parent issue key (e.g., "PROJ-123")'},
+    description='Manage subtasks linked to a parent issue',
+    params={
+        'issue_key': 'Parent issue key (e.g., "PROJ-123")',
+        'summary': 'Required. Subtask title',
+        'description': 'Optional. Subtask detailed description',
+        'priority': 'Optional. Priority level (e.g., "High", "Medium"; default: "Medium")',
+        'assignee': 'Optional. Assignee username (e.g., "jane.smith")',
+        'labels': 'Optional. List of labels for the subtask (e.g., ["subtask", "urgent"])',
+        'due_date': 'Optional. Due date in ISO 8601 format (e.g., "2024-11-30")'
+    },
     responses={404: 'Parent issue not found'}
 )
 class IssueSubtasks(Resource):
     @handle_jira_errors
-    @api.doc(description='Get all subtasks of a parent issue')
-    def get(self, issue_key):
-        """Get subtasks list"""
-        issue = jira.issue(issue_key, fields='subtasks')
-        return [{
-            'id': subtask.id,
-            'key': subtask.key,
-            'summary': subtask.fields.summary,
-            'status': subtask.fields.status.name,
-            'created': subtask.fields.created
-        } for subtask in issue.fields.subtasks]
-
-    @handle_jira_errors
     @api.doc(
-        description='Create a new subtask linked to the parent issue',
-        responses={201: 'Subtask created'}
+        description='Get all subtasks associated with the parent issue',
+        responses={200: 'Successfully retrieved subtasks'}
     )
-    @api.expect(subtask_model)
-    def post(self, issue_key):
-        """Create a subtask"""
-        data = api.payload
-        main_issue = jira.issue(issue_key, fields='project')
-        project_key = main_issue.fields.project.key
-
-        subtask = jira.create_issue(
-            project=project_key,
-            issuetype={'name': 'Sub-task'},
-            summary=data['summary'],
-            description=data.get('description', ''),
-            priority={'name': data.get('priority', 'Medium')},
-            parent={'key': issue_key}
-        )
-
-        return {
-            'subtask_key': subtask.key,
-            'subtask_id': subtask.id,
-            'parent_key': issue_key,
-            'summary': subtask.fields.summary,
-            'status': subtask.fields.status.name,
-            'url': subtask.permalink()
-        }, 201
-
-
-@ns_issue.route('/<string:issue_key>/changelog')
-@api.doc(
-    description='Get change history of an issue',
-    params={'issue_key': 'Issue key (e.g., "PROJ-123")'},
-    responses={404: 'Issue not found'}
-)
-class IssueChangelog(Resource):
-    @handle_jira_errors
-    def get(self, issue_key):
-        """Get issue change history"""
-        issue = jira.issue(issue_key)
-        changelog = []
-        for history in issue.changelog.histories:
-            changelog.append({
-                'author': history.author.displayName,
-                'timestamp': history.created,
-                'changes': [{
-                    'field': item.field,
-                    'from_value': item.fromString,
-                    'to_value': item.toString
-                } for item in history.items]
-            })
-        return changelog
-
-
-# -------------------------- Project Endpoints --------------------------
-@ns_project.route('')
-@api.doc(description='List all Jira projects')
-class ProjectList(Resource):
-    @handle_jira_errors
-    def get(self):
-        """Get all projects"""
-        projects = jira.projects()
-        return [{
-            'id': p.id,
-            'key': p.key,
-            'name': p.name,
-            'description': p.description,
-            'lead': p.lead.displayName if p.lead else None
-        } for p in projects]
-
-
-@ns_project.route('/<string:project_key>')
-@api.doc(
-    description='Get details of a specific project',
-    params={'project_key': 'Project key (e.g., "PROJ")'},
-    responses={404: 'Project not found'}
-)
-class ProjectDetail(Resource):
-    @handle_jira_errors
-    def get(self, project_key):
-        """Get project details"""
-        project = jira.project(project_key)
-        return {
-            'id': project.id,
-            'key': project.key,
-            'name': project.name,
-            'description': project.description,
-            'lead': {
-                'username': project.lead.name,
-                'display_name': project.lead.displayName
-            } if project.lead else None,
-            'components': [c.name for c in jira.project_components(project_key)],
-            'versions': [v.name for v in jira.project_versions(project_key)],
-            'created_at': project.createdAt
-        }
-
-
-# -------------------------- User Endpoints --------------------------
-@ns_user.route('')
-@api.doc(
-    description='Search users by username or email',
-    params={'query': 'Search term (e.g., "john" or "john@example.com")'}
-)
-class UserSearch(Resource):
-    @handle_jira_errors
-    def get(self):
-        """Search users"""
-        query = request.args.get('query', '')
-        users = jira.search_users(query)
-        return [{
-            'username': u.name,
-            'display_name': u.displayName,
-            'email': u.emailAddress,
-            'active': u.active,
-            'account_id': u.accountId
-        } for u in users]
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=Config.PORT)
+    def get(self, issue
