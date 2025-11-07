@@ -25,7 +25,7 @@ api = Api(
     app,
     version='1.7',
     title='Jira API Proxy',
-    description='Complete Jira API with full parameter documentation (all POST params in Swagger)',
+    description='Complete Jira API with full parameter documentation',
     doc='/docs/'
 )
 
@@ -357,4 +357,170 @@ class IssueSubtasks(Resource):
         description='Get all subtasks associated with the parent issue',
         responses={200: 'Successfully retrieved subtasks'}
     )
-    def get(self, issue
+    def get(self, issue_key):
+        """Get subtasks list"""
+        issue = jira.issue(issue_key, fields='subtasks')
+        return [{
+            'id': subtask.id,
+            'key': subtask.key,
+            'summary': subtask.fields.summary,
+            'status': subtask.fields.status.name,
+            'created': subtask.fields.created
+        } for subtask in issue.fields.subtasks]
+
+    @handle_jira_errors
+    @api.doc(
+        description='Create a new subtask linked to the parent issue',
+        responses={201: 'Subtask created successfully'}
+    )
+    @api.expect(subtask_model)
+    def post(self, issue_key):
+        """Create a subtask"""
+        data = api.payload
+        main_issue = jira.issue(issue_key, fields='project')
+        project_key = main_issue.fields.project.key
+
+        subtask_fields = {
+            'project': {'key': project_key},
+            'issuetype': {'name': 'Sub-task'},
+            'summary': data['summary'],
+            'description': data.get('description', ''),
+            'parent': {'key': issue_key}
+        }
+
+        if 'priority' in data:
+            subtask_fields['priority'] = {'name': data['priority']}
+        if 'assignee' in data:
+            subtask_fields['assignee'] = {'name': data['assignee']}
+        if 'labels' in data:
+            subtask_fields['labels'] = data['labels']
+        if 'due_date' in data:
+            subtask_fields['duedate'] = data['due_date']
+
+        subtask = jira.create_issue(fields=subtask_fields)
+        return {
+            'subtask_key': subtask.key,
+            'subtask_id': subtask.id,
+            'parent_key': issue_key,
+            'summary': subtask.fields.summary,
+            'status': subtask.fields.status.name,
+            'assignee': subtask.fields.assignee.displayName if subtask.fields.assignee else None,
+            'created_at': subtask.fields.created,
+            'url': subtask.permalink()
+        }, 201
+
+
+@ns_issue.route('/<string:issue_key>/changelog')
+@api.doc(
+    description='Get complete change history of an issue',
+    params={
+        'issue_key': 'Unique issue identifier (e.g., "PROJ-123")'
+    },
+    responses={
+        200: 'Successfully retrieved change history',
+        404: 'Issue not found'
+    }
+)
+class IssueChangelog(Resource):
+    @handle_jira_errors
+    def get(self, issue_key):
+        """Get issue change history"""
+        issue = jira.issue(issue_key)
+        changelog = []
+        for history in issue.changelog.histories:
+            changelog.append({
+                'author': history.author.displayName,
+                'timestamp': history.created,
+                'changes': [{
+                    'field': item.field,
+                    'from_value': item.fromString,
+                    'to_value': item.toString
+                } for item in history.items]
+            })
+        return changelog
+
+
+# -------------------------- Project Endpoints --------------------------
+@ns_project.route('')
+@api.doc(
+    description='Get list of all projects in Jira instance',
+    responses={
+        200: 'Successfully retrieved projects',
+        500: 'Connection error'
+    }
+)
+class ProjectList(Resource):
+    @handle_jira_errors
+    def get(self):
+        """Get all projects"""
+        projects = jira.projects()
+        return [{
+            'id': p.id,
+            'key': p.key,
+            'name': p.name,
+            'description': p.description,
+            'lead': p.lead.displayName if p.lead else None
+        } for p in projects]
+
+
+@ns_project.route('/<string:project_key>')
+@api.doc(
+    description='Get detailed information about a specific project',
+    params={
+        'project_key': 'Project identifier (e.g., "PROJ", "TEST")'
+    },
+    responses={
+        200: 'Successfully retrieved project details',
+        404: 'Project not found',
+        500: 'Connection error'
+    }
+)
+class ProjectDetail(Resource):
+    @handle_jira_errors
+    def get(self, project_key):
+        """Get project details"""
+        project = jira.project(project_key)
+        return {
+            'id': project.id,
+            'key': project.key,
+            'name': project.name,
+            'description': project.description,
+            'lead': {
+                'username': project.lead.name,
+                'display_name': project.lead.displayName
+            } if project.lead else None,
+            'components': [c.name for c in jira.project_components(project_key)],
+            'versions': [v.name for v in jira.project_versions(project_key)],
+            'created_at': project.createdAt
+        }
+
+
+# -------------------------- User Endpoints --------------------------
+@ns_user.route('')
+@api.doc(
+    description='Search users by username, email, or display name',
+    params={
+        'query': 'Search term (e.g., "john", "john@example.com", "John Doe"; default: empty string)'
+    },
+    responses={
+        200: 'Successfully retrieved users',
+        500: 'Connection error'
+    }
+)
+class UserSearch(Resource):
+    @handle_jira_errors
+    def get(self):
+        """Search users"""
+        query = request.args.get('query', '')
+        users = jira.search_users(query)
+        return [{
+            'username': u.name,
+            'display_name': u.displayName,
+            'email': u.emailAddress,
+            'active': u.active,
+            'account_id': u.accountId
+        } for u in users]
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=Config.PORT)
