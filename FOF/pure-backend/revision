@@ -1,0 +1,209 @@
+仅展示修改的核心部分（完整代码包含所有原有功能）：
+1. 增强的 API 模型（补充所有可能参数）
+python
+运行
+# 扩展Issue创建模型（包含所有可能参数）
+issue_model = api.model('Issue', {
+    'project': fields.String(required=True, description='Project key (e.g., "PROJ")'),
+    'issuetype': fields.String(required=True, description='Issue type (e.g., "Task", "Bug", "Epic")'),
+    'summary': fields.String(required=True, description='Issue title (max 255 characters)'),
+    'description': fields.String(description='Detailed description (supports Jira markdown)'),
+    'priority': fields.String(description='Priority level (e.g., "Highest", "High", "Medium", "Low", "Lowest")'),
+    'assignee': fields.String(description='Username or account ID of assignee (e.g., "john.doe")'),
+    'reporter': fields.String(description='Username or account ID of reporter (default: current user)'),
+    'labels': fields.List(fields.String, description='List of labels (e.g., ["frontend", "bugfix"])'),
+    'components': fields.List(fields.String, description='List of component names (e.g., ["UI", "Backend"])'),
+    'versions': fields.List(fields.String, description='List of fix version names (e.g., ["v1.0", "v2.1"])'),
+    'due_date': fields.String(description='Due date in ISO format (e.g., "2024-12-31")'),
+    'custom_fields': fields.Raw(description='Custom fields (format: {"customfield_10000": "value"})')
+})
+
+# 扩展状态流转模型（包含所有可能参数）
+transition_model = api.model('Transition', {
+    'transition': fields.String(required=True, description='Transition name (e.g., "In Progress", "Done")'),
+    'comment': fields.String(description='Comment for the transition (supports markdown)'),
+    'assignee': fields.String(description='Update assignee during transition (username or "none")'),
+    'resolution': fields.String(description='Resolution name for "Done" transitions (e.g., "Fixed")'),
+    'custom_fields': fields.Raw(description='Update custom fields during transition')
+})
+
+# 扩展子任务模型（包含所有可能参数）
+subtask_model = api.model('SubTask', {
+    'summary': fields.String(required=True, description='Subtask title'),
+    'description': fields.String(description='Subtask details'),
+    'priority': fields.String(description='Priority (e.g., "High", "Medium")'),
+    'assignee': fields.String(description='Assignee username (e.g., "jane.smith")'),
+    'labels': fields.List(fields.String, description='List of labels (e.g., ["subtask", "urgent"])'),
+    'due_date': fields.String(description='Due date in ISO format (e.g., "2024-11-30")')
+})
+2. 新建 Issue 接口（POST）补充完整参数处理
+python
+运行
+@ns_issue.route('')
+class IssueList(Resource):
+    # ... 保留GET方法 ...
+
+    @handle_jira_errors
+    @api.doc(
+        description='Create a new issue with full set of parameters',
+        responses={
+            201: 'Issue created successfully',
+            400: 'Missing required fields or invalid parameter',
+            500: 'Server or Jira connection error'
+        }
+    )
+    @api.expect(issue_model)
+    def post(self):
+        """Create a new issue with complete parameters"""
+        data = api.payload
+        issue_fields = {
+            'project': {'key': data['project']},
+            'issuetype': {'name': data['issuetype']},
+            'summary': data['summary'],
+            'description': data.get('description', ''),
+        }
+
+        # 处理所有可选参数
+        if 'priority' in data:
+            issue_fields['priority'] = {'name': data['priority']}
+        if 'assignee' in data:
+            issue_fields['assignee'] = {'name': data['assignee']}
+        if 'reporter' in data:
+            issue_fields['reporter'] = {'name': data['reporter']}
+        if 'labels' in data:
+            issue_fields['labels'] = data['labels']
+        if 'components' in data:
+            issue_fields['components'] = [{'name': c} for c in data['components']]
+        if 'versions' in data:
+            issue_fields['versions'] = [{'name': v} for v in data['versions']]
+        if 'due_date' in data:
+            issue_fields['duedate'] = data['due_date']
+        if 'custom_fields' in data:
+            issue_fields.update(data['custom_fields'])
+
+        issue = jira.create_issue(fields=issue_fields)
+        return {
+            'id': issue.id,
+            'key': issue.key,
+            'summary': issue.fields.summary,
+            'status': issue.fields.status.name,
+            'assignee': issue.fields.assignee.displayName if issue.fields.assignee else None,
+            'created_at': issue.fields.created,
+            'url': issue.permalink()
+        }, 201
+3. 状态流转接口（POST）补充完整参数处理
+python
+运行
+@ns_issue.route('/<string:issue_key>/transitions')
+class IssueTransitions(Resource):
+    # ... 保留GET方法 ...
+
+    @handle_jira_errors
+    @api.doc(
+        description='Execute a status transition with optional parameters',
+        responses={
+            200: 'Transition executed successfully',
+            400: 'Invalid transition name or parameters',
+            404: 'Issue not found'
+        }
+    )
+    @api.expect(transition_model)
+    def post(self, issue_key):
+        """Execute transition with complete parameters"""
+        data = api.payload
+        transition_name = data['transition']
+        transition_args = {}
+
+        # 处理所有可选参数
+        if 'comment' in data:
+            transition_args['comment'] = data['comment']
+        if 'assignee' in data:
+            transition_args['assignee'] = {'name': data['assignee']}
+        if 'resolution' in data:
+            transition_args['resolution'] = {'name': data['resolution']}
+        if 'custom_fields' in data:
+            transition_args.update(data['custom_fields'])
+
+        # 查找过渡ID
+        transitions = jira.transitions(issue_key)
+        transition = next(
+            (t for t in transitions if t['name'].lower() == transition_name.lower()),
+            None
+        )
+        if not transition:
+            return {'error': f'Transition "{transition_name}" not found'}, 400
+
+        # 执行过渡（带所有参数）
+        jira.transition_issue(issue_key, transition['id'], **transition_args)
+        updated_issue = jira.issue(issue_key, fields='status,assignee,updated')
+
+        return {
+            'issue_key': issue_key,
+            'transition_executed': transition_name,
+            'current_status': updated_issue.fields.status.name,
+            'current_assignee': updated_issue.fields.assignee.displayName if updated_issue.fields.assignee else None,
+            'updated_at': updated_issue.fields.updated,
+            'comment': data.get('comment')
+        }
+4. 子任务创建接口（POST）补充完整参数处理
+python
+运行
+@ns_issue.route('/<string:issue_key>/subtasks')
+class IssueSubtasks(Resource):
+    # ... 保留GET方法 ...
+
+    @handle_jira_errors
+    @api.doc(
+        description='Create a subtask with complete parameters',
+        responses={
+            201: 'Subtask created successfully',
+            400: 'Invalid parameters',
+            404: 'Parent issue not found'
+        }
+    )
+    @api.expect(subtask_model)
+    def post(self, issue_key):
+        """Create subtask with full parameters"""
+        data = api.payload
+        main_issue = jira.issue(issue_key, fields='project')
+        project_key = main_issue.fields.project.key
+
+        subtask_fields = {
+            'project': {'key': project_key},
+            'issuetype': {'name': 'Sub-task'},
+            'summary': data['summary'],
+            'description': data.get('description', ''),
+            'parent': {'key': issue_key}
+        }
+
+        # 处理所有可选参数
+        if 'priority' in data:
+            subtask_fields['priority'] = {'name': data['priority']}
+        if 'assignee' in data:
+            subtask_fields['assignee'] = {'name': data['assignee']}
+        if 'labels' in data:
+            subtask_fields['labels'] = data['labels']
+        if 'due_date' in data:
+            subtask_fields['duedate'] = data['due_date']
+
+        subtask = jira.create_issue(fields=subtask_fields)
+        return {
+            'subtask_key': subtask.key,
+            'subtask_id': subtask.id,
+            'parent_key': issue_key,
+            'summary': subtask.fields.summary,
+            'status': subtask.fields.status.name,
+            'assignee': subtask.fields.assignee.displayName if subtask.fields.assignee else None,
+            'created_at': subtask.fields.created,
+            'url': subtask.permalink()
+        }, 201
+核心改动说明：
+1.** 模型参数完整性 **：
+所有POST/PATCH接口的模型都补充了 Jira 支持的全部常见参数（如assignee、labels、due_date等）
+明确标注每个参数的用途、格式和示例值
+2.** 参数处理逻辑 **：
+代码中添加了对所有可选参数的处理（如components、versions、resolution等）
+确保参数传递符合 Jira API 要求（如组件需要通过name匹配，而非 ID）
+3.** 响应信息增强 **：
+响应中包含了更多执行结果（如过渡后的负责人、创建时间等）
+明确反馈参数是否生效（如comment、assig
