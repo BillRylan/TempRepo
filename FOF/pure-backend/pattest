@@ -1,0 +1,66 @@
+import requests
+from requests.auth import HTTPBasicAuth
+
+# 配置信息
+JIRA_DOMAIN = "http://jira.yourcompany.com"  # 替换为你的 Jira 地址
+USERNAME = "your_username"  # Data Center 用户名（Cloud 版用邮箱）
+API_TOKEN = "your_api_token"  # 生成的 API Token
+API_VERSION = "2"  # API 版本（v2 适用于大多数 Data Center）
+
+# 通用请求头（指定返回 JSON 格式）
+headers = {"Accept": "application/json"}
+
+# 初始化认证（自动处理 Base64 编码）
+auth = HTTPBasicAuth(USERNAME, API_TOKEN)
+
+
+def get_projects():
+    """获取所有可见项目列表"""
+    url = f"{JIRA_DOMAIN}/rest/api/{API_VERSION}/project"
+    response = requests.get(url, auth=auth, headers=headers, verify=False)  # verify=False 处理自签证书（生产环境需改为证书路径）
+    
+    if response.status_code == 200:
+        projects = response.json()
+        print(f"共获取到 {len(projects)} 个项目：")
+        for proj in projects[:5]:  # 打印前5个项目
+            print(f"项目键: {proj['key']}, 名称: {proj['name']}, ID: {proj['id']}")
+    else:
+        print(f"获取项目失败：状态码 {response.status_code}，错误信息：{response.text}")
+
+
+def get_issue(issue_key):
+    """获取单个 Issue 详情（如 PROJ-123）"""
+    url = f"{JIRA_DOMAIN}/rest/api/{API_VERSION}/issue/{issue_key}"
+    response = requests.get(url, auth=auth, headers=headers, verify=False)
+    
+    if response.status_code == 200:
+        issue = response.json()
+        print(f"\nIssue {issue_key} 详情：")
+        print(f"标题：{issue['fields']['summary']}")
+        print(f"状态：{issue['fields']['status']['name']}")
+        print(f"创建人：{issue['fields']['reporter']['displayName']}")
+        print(f"创建时间：{issue['fields']['created']}")
+    else:
+        print(f"获取 Issue 失败：状态码 {response.status_code}，错误信息：{response.text}")
+
+
+def get_current_user():
+    """获取当前登录用户信息"""
+    url = f"{JIRA_DOMAIN}/rest/api/{API_VERSION}/myself"
+    response = requests.get(url, auth=auth, headers=headers, verify=False)
+    
+    if response.status_code == 200:
+        user = response.json()
+        print(f"\n当前登录用户：")
+        print(f"用户名：{user['name']}")
+        print(f"显示名：{user['displayName']}")
+        print(f"邮箱：{user['emailAddress']}")
+    else:
+        print(f"获取用户信息失败：状态码 {response.status_code}，错误信息：{response.text}")
+
+
+if __name__ == "__main__":
+    # 调用示例
+    get_projects()          # 获取项目列表
+    get_issue("PROJ-123")   # 替换为实际 Issue 编号
+    get_current_user()      # 获取当前用户信息
