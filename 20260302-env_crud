@@ -1,0 +1,69 @@
+1. 数据库操作 (crud.py)
+Python
+# 确保顶部有对应导入
+# from models import EnvDictORM
+# from env_dict import EnvDict
+# from database import SessionLocal # 根据你的实际路径调整
+# import logging # 或者你自定义的 db_logger
+
+def db_add_env_dict(env_data: EnvDict) -> EnvDictORM:
+    db_logger.info(f"Adding new EnvDict entry: {env_data.alias}")
+    try:
+        with SessionLocal() as db:
+            new_record = EnvDictORM(
+                alias=env_data.alias,
+                cluster_name_for_search=env_data.clusterNameForSearch,
+                k8s_namespace=env_data.k8sNamespace,
+                cluster_name=env_data.clusterName,
+                env=env_data.env,
+                region=env_data.region
+            )
+            db.add(new_record)
+            db.commit()
+            db.refresh(new_record)
+            db_logger.info(f"Successfully added EnvDict entry with ID: {new_record.id}")
+            return new_record
+    except Exception as e:
+        db_logger.error(f"Failed to add EnvDict: {e}")
+        return None
+
+def db_delete_env_dict(record_id: int) -> bool:
+    db_logger.info(f"Deleting EnvDict entry with ID: {record_id}")
+    try:
+        with SessionLocal() as db:
+            record = db.query(EnvDictORM).filter(EnvDictORM.id == record_id).first()
+            if record:
+                db.delete(record)
+                db.commit()
+                db_logger.info(f"Successfully deleted EnvDict entry with ID: {record_id}")
+                return True
+            else:
+                db_logger.warning(f"EnvDict entry with ID {record_id} not found.")
+                return False
+    except Exception as e:
+        db_logger.error(f"Failed to delete EnvDict: {e}")
+        return False
+2. 路由控制器 (api/xxx.py 或 main.py)
+Python
+from fastapi import APIRouter, HTTPException, Path
+# from crud import db_add_env_dict, db_delete_env_dict
+# from env_dict import EnvDict
+
+router = APIRouter()
+
+@router.post("/env-dict/", summary="新增环境配置")
+def create_env_dict(env_data: EnvDict):
+    new_record = db_add_env_dict(env_data)
+    if new_record is None:
+        raise HTTPException(status_code=500, detail="Database error occurred while creating record.")
+    
+    # 巧妙利用你写的 to_pydantic 并且带上新生成的 ID
+    return {"message": "Success", "id": new_record.id, "data": new_record.to_pydantic()}
+
+@router.delete("/env-dict/{record_id}", summary="删除环境配置")
+def delete_env_dict(record_id: int = Path(..., description="要删除的记录 ID")):
+    success = db_delete_env_dict(record_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Record with id {record_id} not found or deletion failed.")
+    
+    return {"message": "Successfully deleted", "id": record_id}
