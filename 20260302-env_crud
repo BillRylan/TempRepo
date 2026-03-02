@@ -78,3 +78,23 @@ def delete_env_dict(record_id: int = Path(..., description="要删除的记录 I
   "env": "dev",
   "region": "uk"
 }
+
+
+@app.get("/env-dict/", response_model=List[EnvDict], summary="Get all environment configurations")
+def read_all_env_dict():
+    """
+    Retrieve all env_dict records from the database.
+    """
+    # Fetch records using the existing database function
+    records = db_get_env_dict()
+    
+    # Return an empty list if the query fails or returns no data
+    if not records:
+        return []
+    
+    # Convert SQLAlchemy ORM objects to Pydantic models
+    return [record.to_pydantic() for record in records]
+
+
+
+
